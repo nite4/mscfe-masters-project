@@ -1,10 +1,13 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
+import statsmodels.api as sm
 
 from binance import Client
 from constants import *
 from IPython.display import display
+from statsmodels.tsa.stattools import adfuller, coint
 from utils import log
 
 
@@ -30,7 +33,8 @@ def read_excel_sheets(file_path:str='data.xlsx') -> pd.DataFrame:
         for sheet_name, df_temp in all_sheets.items():
             print(sheet_name)
             df_temp = df_temp.rename(columns={'Date':'OpenTime'})
-            df_temp['Symbol'] = sheet_name
+            if 'Symbol' not in df_temp.columns:
+                df_temp['Symbol'] = sheet_name
             df_temp = df_temp.sort_values(by='OpenTime')
             # display(df_temp.tail())
             df = pd.concat([df, df_temp[final_cols]])
@@ -54,7 +58,7 @@ def read_excel_sheets(file_path:str='data.xlsx') -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def get_crypto_data(client:Client=None):
+def get_crypto_data(client:Client=None) -> pd.DataFrame:
     '''
     Retrieves OHLC 5-minute data of the 10 most traded coins against USDT:
     BTCUSDT, ETHUSDT, XRPUSDT, BNBUSDT, SOLUSDT,
@@ -89,7 +93,8 @@ def get_crypto_data(client:Client=None):
         final_cols = ['OpenTime', 'Open', 'High', 'Low', 'Close', 'Symbol']
         for cs in crypto_symbols:
             print(cs)
-            klines = client.get_historical_klines(cs, Client.KLINE_INTERVAL_5MINUTE, '5 Oct, 2024', '8 Jan, 2025')
+            klines = client.get_historical_klines(cs, Client.KLINE_INTERVAL_5MINUTE,
+                                                  '5 Oct, 2024', '8 Jan, 2025')
             temp_df = pd.DataFrame(klines, dtype='float').iloc[:, :5]
             temp_df.columns = ['OpenTime', 'Open', 'High', 'Low', 'Close']
             temp_df['Symbol'] = cs
@@ -108,16 +113,19 @@ def get_crypto_data(client:Client=None):
 
 
 # Helper functions to create a Pandas dataframe with 2 different series
-def process_pairs_series(seriesX, seriesY, dfX, dfY):
+def process_pairs_series(seriesX, seriesY,
+                         dfX=None, dfY=None, df=None) -> pd.DataFrame:
     '''
     Creates Pandas DataFrame with the desired series aligned.
 
     Parameters:
     ___________
     seriesX, seriesY (str):
-        strings with names of symbols to process.
+        strings with names of symbols to process
     dfX, dfY (pd.DataFrame):
-        DataFrames with raw symbol data.
+        DataFrames with raw symbol data
+    df (pd.DataFrame):
+        DataFrame with data of all symbols.
     
     Returns:
     ________
@@ -125,11 +133,20 @@ def process_pairs_series(seriesX, seriesY, dfX, dfY):
         DataFrame with data aligned in time.
     '''
     try:
-        priceX = dfX[dfX['Symbol']==seriesX]['Close'].rename(seriesX)
-        t00 = priceX.index[0]
-        
-        priceY = dfY[dfY['Symbol']==seriesY]['Close'].rename(seriesY)
-        t10 = priceY.index[0]
+        # Using separate equity and crypto dfs
+        if (dfX is not None) & (dfY is not None):
+            priceX = dfX[dfX['Symbol']==seriesX]['Close'].rename(seriesX)
+            t00 = priceX.index[0]
+            
+            priceY = dfY[dfY['Symbol']==seriesY]['Close'].rename(seriesY)
+            t10 = priceY.index[0]
+        # Using df of all data
+        elif df is not None:
+            priceX = df[df['Symbol']==seriesX]['Close'].rename(seriesX)
+            t00 = priceX.index[0]
+            
+            priceY = df[df['Symbol']==seriesY]['Close'].rename(seriesY)
+            t10 = priceY.index[0]
 
         merged = pd.concat([priceX, priceY], axis=1)
         if t00 > t10:
@@ -142,3 +159,108 @@ def process_pairs_series(seriesX, seriesY, dfX, dfY):
         print(f'Failed to process series {seriesX} and {seriesY}: {str(e)}')
         log.error(f'Failed to process series {seriesX} and {seriesY}: {str(e)}')
         return pd.DataFrame()
+
+
+def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2):
+    '''
+    Conducts stationarity test on a given pair of assets.
+
+    Parameters:
+    ___________
+    price_pairs (pd.DataFrame):
+        DataFrame with the two assets to analyze
+    print_stats (bool, default=False):
+        flag for printing test results to the console
+    plotting (bool, default=False):
+
+    '''
+    try:
+        priceX = price_pairs.iloc[:, 0]
+        priceY = price_pairs.iloc[:, 1]
+        
+        tickerX = priceX.name
+        tickerY = priceY.name
+
+        model = sm.OLS(priceY, sm.add_constant(priceX)).fit()
+        beta = model.params.iloc[1] #hedge ratio
+        spread = priceY - beta * priceX
+        # residuals = model.resid
+
+        # correlation of both series
+        correlation = priceX.corr(priceY)
+
+        # ADF test for the Spread
+        adf_result = adfuller(spread)
+        
+        # cointegration of both series
+        coint_result = coint(priceX, priceY)
+        
+        if print_stats:
+            print(f'Pairs: {tickerX} & {tickerY}')
+            print(f'Correlation: {correlation:.3f}')
+
+            adf_stat, adf_pv, _, num_observations, *_ = adf_result
+            print(f'\nSpread ADF Statistic: {adf_stat:.4f}')
+            if adf_pv < 0.05:
+                print(f'p-value: {adf_pv:.3f} (Spread is stationary)')
+            else:
+                print(f'p-value: {adf_pv:.3f} (Spread is non-stationary)')
+
+            coint_stat, coint_pv, crit_values = coint_result
+            print(f'\nCointegration Test Statistic: {coint_stat:.4f}')
+            if coint_pv < 0.05:
+                print(f'p-value: {coint_pv:.3f} (Both series are cointegrated)')
+            else:
+                print(f'p-value: {coint_pv:.3f} (Both series are not cointegrated)')
+
+        if plotting:
+            # spreads computes
+            spread_mean = spread.mean()
+            spread_std = spread.std()
+            z_score = (spread - spread_mean) / spread_std
+
+            # Create a 1x3 subplot layout
+            fig, axes = plt.subplots(1, 3, figsize=(21, 4))  # 1 row, 3 columns
+            
+            # Plot 1: Spread and Trading Thresholds
+            axes[0].plot(spread, label='Spread')
+            axes[0].axhline(spread_mean, color='red', linestyle='--', label='Mean')
+            axes[0].axhline(spread_mean + std * spread_std, color='green',
+                            linestyle='--', label='Upper Threshold')
+            axes[0].axhline(spread_mean - std * spread_std, color='green',
+                            linestyle='--', label='Lower Threshold')
+            axes[0].set_title(f'Spread and Trading Thresholds of {tickerX} and {tickerY}')
+            axes[0].set_xlabel('Time')
+            axes[0].set_ylabel('Spread')
+            axes[0].legend()
+            
+            # Plot 2: Z-Score of Spread
+            axes[1].plot(z_score, label='Z-Score')
+            axes[1].axhline(std, color='green', linestyle='--', label='Upper Threshold')
+            axes[1].axhline(-std, color='green', linestyle='--', label='Lower Threshold')
+            axes[1].axhline(0, color='red', linestyle='--', label='Mean')
+            axes[1].set_title(f'Z-Score of Spread of {tickerX} and {tickerY}')
+            axes[1].set_xlabel('Time')
+            axes[1].set_ylabel('Spread Z-Score')
+            axes[1].legend()
+            
+            # Plot 3: Normalized Prices
+            price_normalized = price_pairs / price_pairs.iloc[0]
+            axes[2].plot(price_normalized[tickerX], label=f'{tickerX} (Normalized)', linestyle='-')
+            axes[2].plot(price_normalized[tickerY], label=f'{tickerY} (Normalized)', linestyle='--')
+            axes[2].set_title(f'Price Correlation of {tickerX} and {tickerY} (Normalized)')
+            axes[2].set_xlabel('Time')
+            axes[2].set_ylabel('Normalized Price')
+            axes[2].legend()
+            axes[2].grid(True)
+            
+            # Adjust layout for better display
+            plt.tight_layout()
+            plt.savefig('output/cointegration_test_{tickerX}_{tickerY}.png')
+            plt.show();
+
+        return spread, correlation, adf_result, coint_result
+    except Exception as e:
+        print(f'Failed to conduct stationarity test on {tickerX} and {tickerY}: {str(e)}')
+        log.error(f'Failed to conduct stationarity test on {tickerX} and {tickerY}: {str(e)}')
+        return None, None, None, None

@@ -1,8 +1,10 @@
 keras
 matplotlib
 numpy
+openpyxl
 pandas
 plotly
 python-binance
 requests
+seaborn
 statsmodels
