@@ -1,0 +1,7 @@
+binance
+matplotlib
+numpy
+pandas
+plotly
+requests
+statsmodels

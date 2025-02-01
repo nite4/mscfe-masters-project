@@ -2,13 +2,23 @@ import numpy as np
 import os
 import pandas as pd
 
-from binance import Client, ThreadedWebsocketManager, ThreadedDepthCacheManager
+from binance import Client
 from IPython.display import display
 
 
-def read_excel_sheets(file_path='data.xlsx'):
+def read_excel_sheets(file_path:str='data.xlsx') -> pd.DataFrame:
     '''
     Reads Excel data from the given file path.
+
+    Parameters:
+    -----------
+    file_path (str):
+        string containing the file path to process.
+    
+    Returns:
+    --------
+    df (pd.DataFrame):
+        A DataFrame containing the data from the Excel file.
     '''
     try:
         all_sheets = pd.read_excel(file_path, sheet_name=None)
@@ -31,13 +41,23 @@ def read_excel_sheets(file_path='data.xlsx'):
         df[float_cols] = df[float_cols].astype(float)
         df = df.sort_values(by=['OpenTime', 'Symbol'])
         return df
+    except FileNotFoundError as fnf:
+        print(f'File not found at {file_path}: {str(fnf)}')
+        return pd.DataFrame()
     except Exception as e:
         print(f'Failed to read Excel data: {str(e)}')
-        return None
+        return pd.DataFrame()
 
 
 def get_crypto_data(client):
-    '''Retrieves OHLC 5-minute data of the 10 most traded coins against USDT.'''
+    '''
+    Retrieves OHLC 5-minute data of the 10 most traded coins against USDT.
+
+    Parameters:
+    -----------
+    client:
+        Binance API client.
+    '''
     try:
         # Highest volume coins against Tether USD
         crypto_symbols = ['BTCUSDT',
@@ -68,4 +88,28 @@ def get_crypto_data(client):
         return klines_df
     except Exception as e:
         print(f'Failed to get cryptocurrency data: {str(e)}')
+        return None
+
+
+# Helper functions to create a Pandas dataframe with 2 different series
+def process_pairs_series(seriesX, seriesY, dfX, dfY):
+    '''
+    Creates Pandas DataFrame with the desired  series aligned.
+    '''
+    try:
+        priceX = dfX[dfX['Symbol']==seriesX]['Close'].rename(seriesX)
+        t00 = priceX.index[0]
+        
+        priceY = dfY[dfY['Symbol']==seriesY]['Close'].rename(seriesY)
+        t10 = priceY.index[0]
+
+        merged = pd.concat([priceX, priceY], axis=1)
+        if t00 > t10:
+            t0 = t00
+        else:
+            t0 = t10
+        
+        return merged.loc[t0:].dropna()
+    except Exception as e:
+        print(f'Failed to process series {seriesX} and {seriesY}: {str(e)}')
         return None
