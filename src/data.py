@@ -140,13 +140,11 @@ def process_pairs_series(seriesX, seriesY,
                     #   .rename(index=[seriesX])
                       )
             t00 = priceX.index[0]
-            print(t00, priceX.head())
             priceY = (pd.DataFrame(dfY[dfY['Symbol']==seriesY][['Close', 'OpenTime']])
                       .set_index('OpenTime')
                     #   .rename(index=[seriesY])
                       )
             t10 = priceY.index[0]
-            print(t10, priceY.head())
         # Using df of all data
         elif df is not None:
             priceX = (pd.DataFrame(df[df['Symbol']==seriesX][['Close', 'OpenTime']])
@@ -154,7 +152,6 @@ def process_pairs_series(seriesX, seriesY,
                     #   .rename(index=seriesX)
                       )
             t00 = priceX.index[0]
-            
             priceY = (pd.DataFrame(df[df['Symbol']==seriesY][['Close', 'OpenTime']])
                       .set_index('OpenTime')
                     #   .rename(index=seriesY)
@@ -212,7 +209,7 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
         coint_result = coint(priceX, priceY)
         
         if print_stats:
-            print(f'Pairs: {tickerX} & {tickerY}')
+            print(f'Pair: {tickerX} & {tickerY}')
             print(f'Correlation: {correlation:.3f}')
 
             adf_stat, adf_pv, _, num_observations, *_ = adf_result
@@ -236,7 +233,7 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
             z_score = (spread - spread_mean) / spread_std
 
             # Create a 1x3 subplot layout
-            fig, axes = plt.subplots(1, 3, figsize=(21, 4))  # 1 row, 3 columns
+            fig, axes = plt.subplots(1, 3, figsize=(21, 6))  # 1 row, 3 columns
             
             # Plot 1: Spread and Trading Thresholds
             axes[0].plot(spread, label='Spread')
@@ -249,6 +246,9 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
             axes[0].set_xlabel('Time')
             axes[0].set_ylabel('Spread')
             axes[0].legend()
+            # axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            axes[0].xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
+            plt.setp(axes[0].xaxis.get_majorticklabels(), rotation=45, ha='right')
             
             # Plot 2: Z-Score of Spread
             axes[1].plot(z_score, label='Z-Score')
@@ -259,6 +259,9 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
             axes[1].set_xlabel('Time')
             axes[1].set_ylabel('Spread Z-Score')
             axes[1].legend()
+            # axes[1].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            axes[1].xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
+            plt.setp(axes[1].xaxis.get_majorticklabels(), rotation=45, ha='right')
             
             # Plot 3: Normalized Prices
             price_normalized = price_pairs / price_pairs.iloc[0]
@@ -268,11 +271,12 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
             axes[2].set_xlabel('Time')
             axes[2].set_ylabel('Normalized Price')
             axes[2].legend()
-            axes[2].grid(True)
+            # axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            axes[2].xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
+            plt.setp(axes[2].xaxis.get_majorticklabels(), rotation=45, ha='right')
             
-            # Adjust layout for better display
             plt.tight_layout()
-            plt.savefig('output/cointegration_test_{tickerX}_{tickerY}.png')
+            plt.savefig(f'output/cointegration_test_{tickerX}_{tickerY}.png')
             plt.show();
 
         return spread, correlation, adf_result, coint_result
