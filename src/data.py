@@ -135,20 +135,36 @@ def process_pairs_series(seriesX, seriesY,
     try:
         # Using separate equity and crypto dfs
         if (dfX is not None) & (dfY is not None):
-            priceX = dfX[dfX['Symbol']==seriesX]['Close'].rename(seriesX)
+            priceX = (pd.DataFrame(dfX[dfX['Symbol']==seriesX][['Close', 'OpenTime']])
+                      .set_index('OpenTime')
+                    #   .rename(index=[seriesX])
+                      )
             t00 = priceX.index[0]
-            
-            priceY = dfY[dfY['Symbol']==seriesY]['Close'].rename(seriesY)
+            print(t00, priceX.head())
+            priceY = (pd.DataFrame(dfY[dfY['Symbol']==seriesY][['Close', 'OpenTime']])
+                      .set_index('OpenTime')
+                    #   .rename(index=[seriesY])
+                      )
             t10 = priceY.index[0]
+            print(t10, priceY.head())
         # Using df of all data
         elif df is not None:
-            priceX = df[df['Symbol']==seriesX]['Close'].rename(seriesX)
+            priceX = (pd.DataFrame(df[df['Symbol']==seriesX][['Close', 'OpenTime']])
+                      .set_index('OpenTime')
+                    #   .rename(index=seriesX)
+                      )
             t00 = priceX.index[0]
             
-            priceY = df[df['Symbol']==seriesY]['Close'].rename(seriesY)
+            priceY = (pd.DataFrame(df[df['Symbol']==seriesY][['Close', 'OpenTime']])
+                      .set_index('OpenTime')
+                    #   .rename(index=seriesY)
+                    )
             t10 = priceY.index[0]
 
-        merged = pd.concat([priceX, priceY], axis=1)
+        # merged = pd.concat([priceX, priceY], axis=1)
+        merged = (pd.merge(left=priceX, right=priceY,
+                          left_index=True, right_index=True))
+        merged.columns = [seriesX, seriesY]
         if t00 > t10:
             t0 = t00
         else:
