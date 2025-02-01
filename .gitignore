@@ -2,3 +2,4 @@
 src/.env
 src/*.log
 src/__pycache__/
+src/output
