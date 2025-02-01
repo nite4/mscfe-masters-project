@@ -1,7 +1,8 @@
-binance
+keras
 matplotlib
 numpy
 pandas
 plotly
+python-binance
 requests
 statsmodels

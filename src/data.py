@@ -3,7 +3,9 @@ import os
 import pandas as pd
 
 from binance import Client
+from constants import *
 from IPython.display import display
+from utils import log
 
 
 def read_excel_sheets(file_path:str='data.xlsx') -> pd.DataFrame:
@@ -18,7 +20,7 @@ def read_excel_sheets(file_path:str='data.xlsx') -> pd.DataFrame:
     Returns:
     --------
     df (pd.DataFrame):
-        A DataFrame containing the data from the Excel file.
+        DataFrame containing the data from the Excel file.
     '''
     try:
         all_sheets = pd.read_excel(file_path, sheet_name=None)
@@ -40,25 +42,37 @@ def read_excel_sheets(file_path:str='data.xlsx') -> pd.DataFrame:
         # Ensure proper data types
         df[float_cols] = df[float_cols].astype(float)
         df = df.sort_values(by=['OpenTime', 'Symbol'])
+        log.info(f'File from {file_path} read successfully.')
         return df
     except FileNotFoundError as fnf:
         print(f'File not found at {file_path}: {str(fnf)}')
+        log.error(f'File not found at {file_path}: {str(fnf)}')
         return pd.DataFrame()
     except Exception as e:
         print(f'Failed to read Excel data: {str(e)}')
+        log.error(f'Failed to read Excel data: {str(e)}')
         return pd.DataFrame()
 
 
-def get_crypto_data(client):
+def get_crypto_data(client:Client=None):
     '''
-    Retrieves OHLC 5-minute data of the 10 most traded coins against USDT.
+    Retrieves OHLC 5-minute data of the 10 most traded coins against USDT:
+    BTCUSDT, ETHUSDT, XRPUSDT, BNBUSDT, SOLUSDT,
+    DOGEUSDT, USDCUSDT, ADAUSDT, TRXUSDT and AVAXUSDT.
 
     Parameters:
     -----------
-    client:
+    client (binance.Client):
         Binance API client.
+    
+    Returns:
+    ________
+    klines_df (pd.DataFrame):
+        A DataFrame containing the data from API.
     '''
     try:
+        if client is None:
+            client = Client(api_key, api_secret)
         # Highest volume coins against Tether USD
         crypto_symbols = ['BTCUSDT',
                           'ETHUSDT',
@@ -85,16 +99,30 @@ def get_crypto_data(client):
         # Ensure correct data types
         klines_df['OpenTime'] = pd.to_datetime(klines_df['OpenTime'], unit='ms')
         klines_df = klines_df.sort_values(by=['OpenTime', 'Symbol'])
+        log.info(f'Data from Binance API retrieved successfully.')
         return klines_df
     except Exception as e:
         print(f'Failed to get cryptocurrency data: {str(e)}')
-        return None
+        log.error(f'Failed to get cryptocurrency data: {str(e)}')
+        return pd.DataFrame()
 
 
 # Helper functions to create a Pandas dataframe with 2 different series
 def process_pairs_series(seriesX, seriesY, dfX, dfY):
     '''
-    Creates Pandas DataFrame with the desired  series aligned.
+    Creates Pandas DataFrame with the desired series aligned.
+
+    Parameters:
+    ___________
+    seriesX, seriesY (str):
+        strings with names of symbols to process.
+    dfX, dfY (pd.DataFrame):
+        DataFrames with raw symbol data.
+    
+    Returns:
+    ________
+    merged (pd.DataFrame):
+        DataFrame with data aligned in time.
     '''
     try:
         priceX = dfX[dfX['Symbol']==seriesX]['Close'].rename(seriesX)
@@ -108,8 +136,9 @@ def process_pairs_series(seriesX, seriesY, dfX, dfY):
             t0 = t00
         else:
             t0 = t10
-        
+        log.info(f'{seriesX} and {seriesY} processed pairwise successfully.')
         return merged.loc[t0:].dropna()
     except Exception as e:
         print(f'Failed to process series {seriesX} and {seriesY}: {str(e)}')
-        return None
+        log.error(f'Failed to process series {seriesX} and {seriesY}: {str(e)}')
+        return pd.DataFrame()

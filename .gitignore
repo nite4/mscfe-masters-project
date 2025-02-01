@@ -1,3 +1,4 @@
 .DS_Store
 src/.env
+src/*.log
 src/__pycache__/
