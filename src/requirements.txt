@@ -7,4 +7,5 @@ plotly
 python-binance
 requests
 seaborn
+scikit-learn
 statsmodels
