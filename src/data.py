@@ -284,3 +284,52 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
         print(f'Failed to conduct stationarity test on {tickerX} and {tickerY}: {str(e)}')
         log.error(f'Failed to conduct stationarity test on {tickerX} and {tickerY}: {str(e)}')
         return None, None, None, None
+
+
+def plot_spread(df, X, Y):
+    '''
+    Plots the normalized spread between two assets. 
+    '''
+    try:
+        fig = plt.figure(figsize=(8,5))
+        plt.axhline(2, color='orange', linestyle='--', linewidth=0.75)
+        plt.axhline(-2, color='orange', linestyle='--', linewidth=0.75)
+        plt.plot(df['NormalizedSpread'],
+                 label='Normalized Spread',
+                 linewidth=0.75,
+                 alpha=0.9,
+                 zorder=1)
+        plt.scatter(df[df['NormalizedSpread']>2]['NormalizedSpread'].index,
+                    df[df['NormalizedSpread']>2]['NormalizedSpread'],
+                    label=f'Sell {X},\nbuy {Y}',
+                    color='red',
+                    alpha=0.6,
+                    marker='.',
+                    s=11,
+                    zorder=2)
+        plt.scatter(df[df['NormalizedSpread']<-2]['NormalizedSpread'].index,
+                    df[df['NormalizedSpread']<-2]['NormalizedSpread'],
+                    label=f'Buy {X},\nsell {Y}',
+                    color='limegreen',
+                    alpha=0.6,
+                    marker='.',
+                    s=11,
+                    zorder=2)
+        if (len(X)>6) & (len(Y)>6):
+            plt.gca().xaxis.set_major_locator(plt.IndexLocator(base=1000, offset=0))
+        else:
+            plt.gca().xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
+        plt.setp(plt.gca().xaxis.get_majorticklabels(), rotation=45, ha='right', size=6)
+        plt.title(f'Normalized Spread of {X} and {Y}')
+        plt.xlabel('Time')
+        plt.ylabel('Normalized Spread')
+        plt.legend(fontsize=8,
+                   bbox_to_anchor=(1.3, 1),
+                   loc='upper right'
+                  )
+        plt.tight_layout()
+        plt.savefig(f'output/normalized_spread_{X}_{Y}.png')
+        plt.show();
+    except Exception as e:
+        print(f'Failed to plot normalized spread: {str(e)}')
+        log.error(f'Failed to plot normalized spread: {str(e)}')
