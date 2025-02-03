@@ -9,3 +9,4 @@ requests
 seaborn
 scikit-learn
 statsmodels
+xgboost

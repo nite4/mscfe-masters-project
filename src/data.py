@@ -286,7 +286,7 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
         return None, None, None, None
 
 
-def plot_spread(df, X, Y):
+def plot_spread(df, X, Y, s:float=2.0):
     '''
     Plots the normalized spread between two assets. 
     '''
@@ -299,16 +299,16 @@ def plot_spread(df, X, Y):
                  linewidth=0.75,
                  alpha=0.9,
                  zorder=1)
-        plt.scatter(df[df['NormalizedSpread']>2]['NormalizedSpread'].index,
-                    df[df['NormalizedSpread']>2]['NormalizedSpread'],
+        plt.scatter(df[df['NormalizedSpread']>s]['NormalizedSpread'].index,
+                    df[df['NormalizedSpread']>s]['NormalizedSpread'],
                     label=f'Sell {X},\nbuy {Y}',
                     color='red',
                     alpha=0.6,
                     marker='.',
                     s=11,
                     zorder=2)
-        plt.scatter(df[df['NormalizedSpread']<-2]['NormalizedSpread'].index,
-                    df[df['NormalizedSpread']<-2]['NormalizedSpread'],
+        plt.scatter(df[df['NormalizedSpread']<-1*s]['NormalizedSpread'].index,
+                    df[df['NormalizedSpread']<-1*s]['NormalizedSpread'],
                     label=f'Buy {X},\nsell {Y}',
                     color='limegreen',
                     alpha=0.6,
