@@ -286,28 +286,41 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
         return None, None, None, None
 
 
-def plot_spread(df, X, Y, s:float=2.0):
+def plot_spread(df, X, Y, s:float=2.0, ax=None):
     '''
-    Plots the normalized spread between two assets. 
+    Plots the normalized spread between two assets.
+
+    Parameters:
+    ___________
+    spread_df (pd.DataFrame):
+        DataFrame containing the spread data
+    tickerX, tickerY (str):
+        ticker symbols for pair assets
+    ax (matplotlib.axes.Axes, default=None):
+        axes object to plot on; if None, a new figure is created.
     '''
     try:
-        fig = plt.figure(figsize=(8,5))
-        plt.axhline(2, color='orange', linestyle='--', linewidth=0.75)
-        plt.axhline(-2, color='orange', linestyle='--', linewidth=0.75)
-        plt.plot(df['NormalizedSpread'],
+        if ax is None:  # Create a new figure if ax is not provided
+            fig, ax = plt.subplots(figsize=(8, 5))
+        else:
+            plt.sca(ax)
+        ax.axhline(2, color='orange', linestyle='--', linewidth=0.75)
+        ax.axhline(-2, color='orange', linestyle='--', linewidth=0.75)
+        ax.plot(df['NormalizedSpread'],
                  label='Normalized Spread',
+                 color='dodgerblue',
                  linewidth=0.75,
                  alpha=0.9,
                  zorder=1)
-        plt.scatter(df[df['NormalizedSpread']>s]['NormalizedSpread'].index,
+        ax.scatter(df[df['NormalizedSpread']>s]['NormalizedSpread'].index,
                     df[df['NormalizedSpread']>s]['NormalizedSpread'],
                     label=f'Sell {X},\nbuy {Y}',
-                    color='red',
+                    color='crimson',
                     alpha=0.6,
                     marker='.',
                     s=11,
                     zorder=2)
-        plt.scatter(df[df['NormalizedSpread']<-1*s]['NormalizedSpread'].index,
+        ax.scatter(df[df['NormalizedSpread']<-1*s]['NormalizedSpread'].index,
                     df[df['NormalizedSpread']<-1*s]['NormalizedSpread'],
                     label=f'Buy {X},\nsell {Y}',
                     color='limegreen',
@@ -316,11 +329,11 @@ def plot_spread(df, X, Y, s:float=2.0):
                     s=11,
                     zorder=2)
         if (len(X)>6) & (len(Y)>6):
-            plt.gca().xaxis.set_major_locator(plt.IndexLocator(base=1000, offset=0))
+            ax.xaxis.set_major_locator(plt.IndexLocator(base=1000, offset=0))
         else:
-            plt.gca().xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
-        plt.setp(plt.gca().xaxis.get_majorticklabels(), rotation=45, ha='right', size=6)
-        plt.title(f'Normalized Spread of {X} and {Y}')
+            ax.xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right', size=6)
+        plt.title(f'Normalized Spread of {X} and {Y} - Training Set')
         plt.xlabel('Time')
         plt.ylabel('Normalized Spread')
         plt.legend(fontsize=8,
@@ -328,8 +341,9 @@ def plot_spread(df, X, Y, s:float=2.0):
                    loc='upper right'
                   )
         plt.tight_layout()
-        plt.savefig(f'output/normalized_spread_{X}_{Y}.png')
-        plt.show();
+        # plt.savefig(f'output/normalized_spread_{X}_{Y}.png')
+        return ax
     except Exception as e:
         print(f'Failed to plot normalized spread: {str(e)}')
         log.error(f'Failed to plot normalized spread: {str(e)}')
+        return None

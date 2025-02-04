@@ -9,4 +9,5 @@ requests
 seaborn
 scikit-learn
 statsmodels
+tensorflow
 xgboost

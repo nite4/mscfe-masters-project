@@ -1,11 +1,18 @@
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.layers import (Dense, Dropout, Flatten,
+                                     Input, LayerNormalization, LSTM,
+                                     MultiHeadAttention, SimpleRNN)
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.optimizers import Adam
 from utils import log
 from xgboost import XGBRegressor
 
@@ -110,7 +117,7 @@ def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
         predicted spread values, and generated trading signals
     '''
     try:
-        if learning_rate <= 0 or n_estimators <= 0 or max_depth <= 0:
+        if (learning_rate <= 0) or (n_estimators <= 0) or (max_depth <= 0):
             raise ValueError('Learning rate, n_estimators, and max_depth must be greater than 0.')
         
         # Create a copy of the dataframe to avoid SettingWithCopyWarning
@@ -156,9 +163,285 @@ def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
         return None, np.inf, pd.DataFrame()
 
 
-def plot_model_forecasts(ridge_test_df:pd.DataFrame, xgb_test_df:pd.DataFrame,
-                         lstm_test_df:pd.DataFrame, transformer_test_df:pd.DataFrame,
-                         tickerX:str, tickerY:str, s:float=2.0):
+# @tf.function(reduce_retracing=True)
+def lstm_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
+                     units: int = 50, dropout_rate: float = 0.2,
+                     learning_rate: float = 0.001, epochs: int = 50,
+                     batch_size: int = 32):
+    '''
+    Runs an LSTM model on the input data.
+
+    Parameters:
+    ___________
+    df (pd.DataFrame):
+        DataFrame with features and target variable
+    lookback (int, default=10):
+        number of previous time steps used as input for LSTM
+    s (float, default=2.0):
+        threshold for trading signal generation
+    units (int, default=50):
+        number of LSTM units in the layer
+    dropout_rate (float, default=0.2):
+        dropout rate for regularization
+    learning_rate (float, default=0.001):
+        learning rate for optimizer
+    epochs (int, default=50):
+        number of training epochs
+    batch_size (int, default=32):
+        batch size for training.
+    
+    Returns:
+    ________
+    model (tf.keras.Model):
+        trained LSTM model
+    mse (float):
+        Mean Squared Error of model predictions on test set
+    df_test (pd.DataFrame): 
+        test set DataFrame containing original features,
+        predicted spread values, and generated trading signals.
+    '''
+    try:
+        df = df.copy()
+        X = df.drop(['NormalizedSpread'], axis=1).values
+        y = df['NormalizedSpread'].values
+        
+        # Convert data to sequences
+        X_seq, y_seq = [], []
+        for i in range(lookback, len(X)):
+            X_seq.append(X[i - lookback:i])
+            y_seq.append(y[i])
+        
+        X_seq, y_seq = np.array(X_seq), np.array(y_seq)
+        
+        # Train-Test split
+        test_size = int(0.2 * len(X_seq))
+        X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
+        y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
+        
+        # Build LSTM model
+        model = Sequential()
+        model.add(Input(shape=(lookback, X.shape[1])))  # Use Input(shape) for the first layer
+        model.add(LSTM(units, return_sequences=False))
+        model.add(Dropout(dropout_rate))
+        model.add(Dense(1))
+        
+        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
+        model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
+        
+        y_pred = model.predict(X_test).flatten()
+        mse = mean_squared_error(y_test, y_pred)
+        print(f'LSTM MSE: {mse}')
+        log.info(f'LSTM MSE: {mse}')
+        
+        # Generate trading signals
+        signals = np.where(y_pred>s, 'Sell A, Buy B',
+                           np.where(y_pred<-1*s, 'Buy A, Sell B',
+                                    'No Trade'))
+        
+        df_test = df.iloc[-test_size:].copy()
+        df_test['PredictedSpread'] = y_pred
+        df_test['PredictedSignal'] = signals
+        
+        return model, mse, df_test
+    except Exception as e:
+        print(f'Failed to run LSTM model: {str(e)}')
+        log.error(f'Failed to run LSTM model: {str(e)}')
+        return None, np.inf, pd.DataFrame()
+
+
+# @tf.function(reduce_retracing=True)
+def rnn_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
+                    units: int = 50, dropout_rate: float = 0.2,
+                    learning_rate: float = 0.001, epochs: int = 50,
+                    batch_size: int = 32):
+    '''
+    Runs an RNN model on the input data.
+
+    Parameters:
+    ___________
+    df (pd.DataFrame):
+        DataFrame with features and target variable
+    lookback (int, default=10):
+        number of previous time steps used as input for RNN
+    s (float, default=2.0):
+        threshold for trading signal generation
+    units (int, default=50):
+        number of RNN units in the layer
+    dropout_rate (float, default=0.2):
+        dropout rate for regularization
+    learning_rate (float, default=0.001):
+        learning rate for optimizer
+    epochs (int, default=50):
+        number of training epochs
+    batch_size (int, default=32):
+        batch size for training.
+    
+    Returns:
+    ________
+    model (tf.keras.Model):
+        trained RNN model
+    mse (float):
+        Mean Squared Error of model predictions on test set
+    df_test (pd.DataFrame): 
+        test set DataFrame containing original features,
+        predicted spread values, and generated trading signals.
+    '''
+    try:
+        df = df.copy()
+        X = df.drop(['NormalizedSpread'], axis=1).values
+        y = df['NormalizedSpread'].values
+        
+        # Convert data to sequences
+        X_seq, y_seq = [], []
+        for i in range(lookback, len(X)):
+            X_seq.append(X[i - lookback:i])
+            y_seq.append(y[i])
+        
+        X_seq, y_seq = np.array(X_seq), np.array(y_seq)
+        
+        # Train-Test split
+        test_size = int(0.2 * len(X_seq))
+        X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
+        y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
+        
+        # Build RNN model
+        model = Sequential()
+        model.add(Input(shape=(lookback, X.shape[1])))  # Use Input(shape) for the first layer
+        model.add(SimpleRNN(units, return_sequences=False))
+        model.add(Dropout(dropout_rate))
+        model.add(Dense(1))
+        
+        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
+        model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
+        
+        y_pred = model.predict(X_test).flatten()
+        mse = mean_squared_error(y_test, y_pred)
+        print(f'RNN MSE: {mse}')
+        log.info(f'RNN MSE: {mse}')
+        
+        # Generate trading signals
+        signals = np.where(y_pred>s, 'Sell A, Buy B',
+                           np.where(y_pred<-1*s, 'Buy A, Sell B',
+                                    'No Trade'))
+        
+        df_test = df.iloc[-test_size:].copy()
+        df_test['PredictedSpread'] = y_pred
+        df_test['PredictedSignal'] = signals
+        
+        return model, mse, df_test
+    except Exception as e:
+        print(f'Failed to run RNN model: {str(e)}')
+        log.error(f'Failed to run RNN model: {str(e)}')
+        return None, np.inf, pd.DataFrame()
+
+
+# @tf.function(reduce_retracing=True)
+def transformer_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
+                           num_heads: int = 2, ff_dim: int = 64, dropout_rate: float = 0.1,
+                           learning_rate: float = 0.001, epochs: int = 50, batch_size: int = 32):
+    '''
+    Runs a Transformer model on the input data.
+
+    Parameters:
+    ___________
+    df (pd.DataFrame):
+        DataFrame with features and target variable
+    lookback (int, default=10):
+        Number of previous time steps used as input for the Transformer model
+    s (float, default=2.0):
+        Threshold for trading signal generation
+    num_heads (int, default=2):
+        Number of attention heads in the Transformer encoder
+    ff_dim (int, default=64):
+        Dimensionality of the feed-forward network in the Transformer
+    dropout_rate (float, default=0.1):
+        Dropout rate for regularization
+    learning_rate (float, default=0.001):
+        Learning rate for optimizer
+    epochs (int, default=50):
+        Number of training epochs
+    batch_size (int, default=32):
+        Batch size for training
+
+    Returns:
+    ________
+    model (tf.keras.Model):
+        Trained Transformer model
+    mse (float):
+        Mean Squared Error of model predictions on test set
+    df_test (pd.DataFrame): 
+        Test set DataFrame containing original features,
+        predicted spread values, and generated trading signals.
+    '''
+    try:
+        df = df.copy()
+        X = df.drop(['NormalizedSpread'], axis=1).values
+        y = df['NormalizedSpread'].values
+
+        # Convert data to sequences
+        X_seq, y_seq = [], []
+        for i in range(lookback, len(X)):
+            X_seq.append(X[i - lookback:i])
+            y_seq.append(y[i])
+
+        X_seq, y_seq = np.array(X_seq), np.array(y_seq)
+
+        # Train-Test split
+        test_size = int(0.2 * len(X_seq))
+        X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
+        y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
+
+        # Transformer Encoder Block
+        def transformer_encoder(inputs, num_heads, ff_dim, dropout_rate):
+            attention = MultiHeadAttention(num_heads=num_heads, key_dim=ff_dim)(inputs, inputs)
+            attention = Dropout(dropout_rate)(attention)
+            attention = LayerNormalization(epsilon=1e-6)(inputs + attention)
+
+            ff_output = Dense(ff_dim, activation='relu')(attention)
+            ff_output = Dense(inputs.shape[-1])(ff_output)
+            ff_output = Dropout(dropout_rate)(ff_output)
+            return LayerNormalization(epsilon=1e-6)(attention + ff_output)
+
+        # Define model input
+        inputs = Input(shape=(lookback, X.shape[1]))
+        x = transformer_encoder(inputs, num_heads, ff_dim, dropout_rate)
+        x = Flatten()(x)
+        x = Dense(32, activation='relu')(x)
+        x = Dropout(dropout_rate)(x)
+        outputs = Dense(1)(x)
+
+        model = Model(inputs, outputs)
+        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
+
+        # Train model
+        model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
+
+        # Predictions
+        y_pred = model.predict(X_test).flatten()
+        mse = mean_squared_error(y_test, y_pred)
+        print(f'Transformer MSE: {mse}')
+        log.info(f'Transformer MSE: {mse}')
+
+        # Generate trading signals
+        signals = np.where(y_pred > s, 'Sell A, Buy B',
+                           np.where(y_pred < -1 * s, 'Buy A, Sell B',
+                                    'No Trade'))
+
+        df_test = df.iloc[-test_size:].copy()
+        df_test['PredictedSpread'] = y_pred
+        df_test['PredictedSignal'] = signals
+
+        return model, mse, df_test
+    except Exception as e:
+        print(f'Failed to run Transformer model: {str(e)}')
+        log.error(f'Failed to run Transformer model: {str(e)}')
+        return None, np.inf, pd.DataFrame()
+
+
+def plot_model_forecasts(ridge_test_df:pd.DataFrame=None, xgb_test_df:pd.DataFrame=None,
+                         lstm_test_df:pd.DataFrame=None, transformer_test_df:pd.DataFrame=None,
+                         rnn_test_df:pd.DataFrame=None,
+                         tickerX:str=None, tickerY:str=None, s:float=2.0, ax:matplotlib.axes=None):
     '''
     Plots actual vs predicted spread values for both Ridge and XGBoost models.
 
@@ -169,56 +452,88 @@ def plot_model_forecasts(ridge_test_df:pd.DataFrame, xgb_test_df:pd.DataFrame,
     tickerX, tickerY (str):
         ticker symbols for pair assets
     s (float, default=2.0):
-        threshold for trading strategy signals detection.
+        threshold for trading strategy signals detection
+     ax (matplotlib.axes.Axes, default=None):
+        axes object to plot on; if None, a new figure is created.
     '''
     try:
-        plt.figure(figsize=(8,5))
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 5))
+        else:
+            plt.sca(ax)
         # Add trading signal threshold lines
-        plt.axhline(y=s, color='orange', linestyle='--', alpha=0.5)
-        plt.axhline(y=-1*s, color='orange', linestyle='--', alpha=0.5)
+        ax.axhline(y=s, color='orange', linestyle='--', alpha=0.5)
+        ax.axhline(y=-1*s, color='orange', linestyle='--', alpha=0.5)
         # Plot actual values
-        plt.plot(ridge_test_df['NormalizedSpread'], 
+        ax.plot(ridge_test_df['NormalizedSpread'], 
                 label='Actual Spread',
                 color='black',
-                alpha=0.7)
+                linewidth=0.75,
+                )
         
         # Plot Ridge predictions if available
         if ridge_test_df is not None and not ridge_test_df.empty:
-            plt.plot(ridge_test_df['PredictedSpread'],
+            ax.plot(ridge_test_df['PredictedSpread'],
                     label='Ridge Prediction',
+                    color='teal',
+                    linewidth=0.75,
                     linestyle='--',
-                    alpha=0.8)
+                    )
             
         # Plot XGBoost predictions if available
         if xgb_test_df is not None and not xgb_test_df.empty:
-            plt.plot(xgb_test_df['PredictedSpread'],
+            ax.plot(xgb_test_df['PredictedSpread'],
                     label='XGBoost Prediction',
+                    color='darkorchid',
+                    linewidth=0.75,
                     linestyle=':',
-                    alpha=0.8)
+                    )
             
         # Plot LSTM predictions if available
         if lstm_test_df is not None and not lstm_test_df.empty:
-            plt.plot(lstm_test_df['PredictedSpread'],
+            ax.plot(lstm_test_df['PredictedSpread'],
                     label='LSTM Prediction',
+                    color='forestgreen',
+                    linewidth=0.75,
                     linestyle='-.',
-                    alpha=0.8)
+                    )
             
         # Plot Transformer predictions if available 
         if transformer_test_df is not None and not transformer_test_df.empty:
-            plt.plot(transformer_test_df['PredictedSpread'],
+            ax.plot(transformer_test_df['PredictedSpread'],
                     label='Transformer Prediction',
+                    color='crimson',
+                    linewidth=0.75,
                     linestyle='-',
-                    alpha=0.8)
-            
-        plt.title(f'Model Predictions for {tickerX}-{tickerY} Spread')
+                    )
+        
+        # Plot RNN predictions if available 
+        if rnn_test_df is not None and not rnn_test_df.empty:
+            ax.plot(rnn_test_df['PredictedSpread'],
+                    label='RNN Prediction',
+                    color='darkorange',
+                    linewidth=0.75,
+                    linestyle='-',
+                    )
+
+        # Clearer timestamp displaying
+        if (len(tickerX)>6) & (len(tickerY)>6):
+            ax.xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
+        else:
+            ax.xaxis.set_major_locator(plt.IndexLocator(base=40, offset=0))
+
+        plt.title(f'Model Predictions for {tickerX}-{tickerY} Spread - Validation Set')
         plt.xlabel('Time')
         plt.ylabel('Normalized Spread')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.setp(plt.gca().xaxis.get_majorticklabels(), rotation=45, ha='right')
+        plt.legend(fontsize=8,
+                   bbox_to_anchor=(1.35, 1),
+                   loc='upper right'
+                   )
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right', size=6)
         plt.tight_layout()
-        plt.savefig(f'forecast_{tickerX}_{tickerY}.png')
-        plt.show();
+        # plt.savefig(f'output/forecast_{tickerX}_{tickerY}.png')
+        return ax
     except Exception as e:
         print(f'Failed to plot model forecasts: {str(e)}')
         log.error(f'Failed to plot model forecasts: {str(e)}')
+        return None
