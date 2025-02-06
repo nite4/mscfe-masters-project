@@ -2,7 +2,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import psutil
 import tensorflow as tf
+import time
 
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error
@@ -15,6 +17,14 @@ from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.optimizers import Adam
 from utils import log
 from xgboost import XGBRegressor
+
+
+def get_memory_usage():
+    '''
+    Helper function measuring memory usage.
+    '''
+    process = psutil.Process()
+    return process.memory_info().rss / 1024**2
 
 
 def ridge_regression(df:pd.DataFrame, alpha:float=1.0, s:float=2.0, solver:str='auto'):
@@ -63,9 +73,19 @@ def ridge_regression(df:pd.DataFrame, alpha:float=1.0, s:float=2.0, solver:str='
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
+        # Measure time and memory usage
+        start_time = time.time()
+        start_memory = get_memory_usage()
+
         ridge = Ridge(alpha=alpha, solver=solver)
         ridge.fit(X_train_scaled, y_train)
         y_pred = ridge.predict(X_test_scaled)
+
+        end_memory = get_memory_usage()
+        end_time = time.time()
+
+        time_usage = end_time - start_time
+        memory_usage = end_memory - start_memory
 
         mse = mean_squared_error(y_test, y_pred)
         print(f'Ridge Regression MSE: {mse}')
@@ -81,11 +101,11 @@ def ridge_regression(df:pd.DataFrame, alpha:float=1.0, s:float=2.0, solver:str='
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
 
-        return ridge, mse, df_test
+        return ridge, mse, df_test, time_usage, memory_usage
     except Exception as e:
         print(f'Failed to run Ridge Regression (alpha={alpha}, s={s}): {str(e)}')
         log.error(f'Failed to run Ridge Regression (alpha={alpha}, s={s}): {str(e)}')
-        return None, np.inf, pd.DataFrame()
+        return None, np.inf, pd.DataFrame(), 0, 0
 
 
 def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
@@ -136,11 +156,21 @@ def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
+        # Measure time and memory usage
+        start_time = time.time()
+        start_memory = get_memory_usage()
+
         xgb_model = XGBRegressor(learning_rate=learning_rate,
                                  n_estimators=n_estimators,
                                  max_depth=max_depth)
         xgb_model.fit(X_train_scaled, y_train)
         y_pred = xgb_model.predict(X_test_scaled)
+
+        end_memory = get_memory_usage()
+        end_time = time.time()
+
+        time_usage = end_time - start_time
+        memory_usage = end_memory - start_memory
 
         mse = mean_squared_error(y_test, y_pred)
         print(f'XGBoost MSE: {mse}')
@@ -156,11 +186,11 @@ def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
         
-        return xgb_model, mse, df_test
+        return xgb_model, mse, df_test, time_usage, memory_usage
     except Exception as e:
         print(f'Failed to run XGBoost (learning_rate={learning_rate}, n_estimators={n_estimators}, max_depth={max_depth}, s={s}): {str(e)}')
         log.error(f'Failed to run XGBoost (learning_rate={learning_rate}, n_estimators={n_estimators}, max_depth={max_depth}, s={s}): {str(e)}')
-        return None, np.inf, pd.DataFrame()
+        return None, np.inf, pd.DataFrame(), 0, 0
 
 
 # @tf.function(reduce_retracing=True)
@@ -224,11 +254,21 @@ def lstm_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         model.add(LSTM(units, return_sequences=False))
         model.add(Dropout(dropout_rate))
         model.add(Dense(1))
-        
+
+        # Measure time and memory usage
+        start_time = time.time()
+        start_memory = get_memory_usage()
+
         model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
         model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
-        
         y_pred = model.predict(X_test).flatten()
+
+        end_memory = get_memory_usage()
+        end_time = time.time()
+
+        time_usage = end_time - start_time
+        memory_usage = end_memory - start_memory
+        
         mse = mean_squared_error(y_test, y_pred)
         print(f'LSTM MSE: {mse}')
         log.info(f'LSTM MSE: {mse}')
@@ -242,11 +282,11 @@ def lstm_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
         
-        return model, mse, df_test
+        return model, mse, df_test, time_usage, memory_usage
     except Exception as e:
         print(f'Failed to run LSTM model: {str(e)}')
         log.error(f'Failed to run LSTM model: {str(e)}')
-        return None, np.inf, pd.DataFrame()
+        return None, np.inf, pd.DataFrame(), 0, 0
 
 
 # @tf.function(reduce_retracing=True)
@@ -311,10 +351,20 @@ def rnn_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         model.add(Dropout(dropout_rate))
         model.add(Dense(1))
         
+        # Measure time and memory usage
+        start_time = time.time()
+        start_memory = get_memory_usage()
+
         model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
         model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
-        
         y_pred = model.predict(X_test).flatten()
+
+        end_memory = get_memory_usage()
+        end_time = time.time()
+
+        time_usage = end_time - start_time
+        memory_usage = end_memory - start_memory
+                
         mse = mean_squared_error(y_test, y_pred)
         print(f'RNN MSE: {mse}')
         log.info(f'RNN MSE: {mse}')
@@ -328,11 +378,11 @@ def rnn_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
         
-        return model, mse, df_test
+        return model, mse, df_test, time_usage, memory_usage
     except Exception as e:
         print(f'Failed to run RNN model: {str(e)}')
         log.error(f'Failed to run RNN model: {str(e)}')
-        return None, np.inf, pd.DataFrame()
+        return None, np.inf, pd.DataFrame(), 0, 0
 
 
 # @tf.function(reduce_retracing=True)
@@ -411,13 +461,21 @@ def transformer_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         outputs = Dense(1)(x)
 
         model = Model(inputs, outputs)
+
+        # Measure time and memory usage
+        start_time = time.time()
+        start_memory = get_memory_usage()
+
         model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
-
-        # Train model
         model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
-
-        # Predictions
         y_pred = model.predict(X_test).flatten()
+
+        end_memory = get_memory_usage()
+        end_time = time.time()
+
+        time_usage = end_time - start_time
+        memory_usage = end_memory - start_memory
+
         mse = mean_squared_error(y_test, y_pred)
         print(f'Transformer MSE: {mse}')
         log.info(f'Transformer MSE: {mse}')
@@ -431,11 +489,11 @@ def transformer_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
 
-        return model, mse, df_test
+        return model, mse, df_test, time_usage, memory_usage
     except Exception as e:
         print(f'Failed to run Transformer model: {str(e)}')
         log.error(f'Failed to run Transformer model: {str(e)}')
-        return None, np.inf, pd.DataFrame()
+        return None, np.inf, pd.DataFrame(), 0, 0
 
 
 def plot_model_forecasts(ridge_test_df:pd.DataFrame=None, xgb_test_df:pd.DataFrame=None,
