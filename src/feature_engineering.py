@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import talib
 
+import data
+
 def exponential_moving_average(series, ticker, timeperiod):
     """
     Calculate the Exponential Moving Average (EMA) of a time series data.
@@ -16,14 +18,18 @@ def exponential_moving_average(series, ticker, timeperiod):
     
     The Exponential Moving Average (EMA) is a weighted moving average where more 
     weight is given to recent data points, making it more responsive to recent price changes.
+
+    Default parameters:
+        - timeperiod: 12, 26
     """
 
     indicator = talib.EMA(series, timeperiod=timeperiod)
-    indicator.name = f"{ticker}_EMA_{timeperiod}"
+    indicator.name = f"{ticker}_EMA{timeperiod}"
     
     return indicator
 
-def moving_average_convergence_divergence(series, ticker, fast, slow, signal):
+
+def moving_average_convergence_divergence(series, ticker, fast=12, slow=26, signal=9):
     """
     Calculate the Moving Average Convergence Divergence (MACD) and its signal line.
 
@@ -42,6 +48,11 @@ def moving_average_convergence_divergence(series, ticker, fast, slow, signal):
     
     The MACD is used to identify changes in the strength, direction, momentum, and duration 
     of a trend in a stock's price. The signal line is used to identify buy and sell signals.
+
+    Default parameters:
+        - fast: 12
+        - slow: 26
+        - timeperiod: 9
     """
 
     macd, macdsignal, macdhist = talib.MACD(
@@ -56,6 +67,7 @@ def moving_average_convergence_divergence(series, ticker, fast, slow, signal):
     macdhist.name = f"{ticker}_MACDhist"
     
     return macd, macdsignal, macdhist
+
 
 def relative_strength_index(series, ticker, timeperiod):
     """
@@ -72,10 +84,13 @@ def relative_strength_index(series, ticker, timeperiod):
     The Relative Strength Index (RSI) is a momentum oscillator that measures the speed 
     and change of price movements. It ranges from 0 to 100, with levels above 70 indicating 
     overbought conditions and levels below 30 indicating oversold conditions.
+
+    Default parameters:
+        - timeperiod: 14
     """
 
     indicator = talib.RSI(series, timeperiod=timeperiod)
-    indicator.name = f"{ticker}_RSI_{timeperiod}"
+    indicator.name = f"{ticker}_RSI{timeperiod}"
     
     return indicator
 
@@ -95,13 +110,19 @@ def bollinger_bands(series, ticker, timeperiod=20, nbdevup=2, nbdevdn=2):
 
     Returns:
         tuple: (upper_band, middle_band, lower_band)
+
+    Default parameters:
+        - timeperiod: 20
+        - nbdevup: 2
+        - nbdevdn: 2
     """
     upper, middle, lower = talib.BBANDS(series, timeperiod=timeperiod, nbdevup=nbdevup, nbdevdn=nbdevdn)
-    upper.name = f"{ticker}_BB_upper"
-    middle.name = f"{ticker}_BB_middle"
-    lower.name = f"{ticker}_BB_lower"
+    upper.name = f"{ticker}_BBupper"
+    middle.name = f"{ticker}_BBmiddle"
+    lower.name = f"{ticker}_BBlower"
     
     return upper, middle, lower
+
 
 def average_true_range(high, low, close, ticker, timeperiod=14):
     """
@@ -120,11 +141,16 @@ def average_true_range(high, low, close, ticker, timeperiod=14):
 
     Returns:
         pd.Series: ATR values.
+
+    Default parameters:
+        - timeperiod: 14
     """
     atr = talib.ATR(high, low, close, timeperiod=timeperiod)
-    atr.name = f"{ticker}_ATR_{timeperiod}"
+    atr.name = f"{ticker}_ATR{timeperiod}"
+    
     return atr
 
+    
 def stochastic_oscillator(high, low, close, ticker, fastk_period=14, slowk_period=3, slowd_period=3):
     """
     Computes the Stochastic Oscillator, a momentum indicator comparing a stock's closing price to its price range.
@@ -142,10 +168,15 @@ def stochastic_oscillator(high, low, close, ticker, fastk_period=14, slowk_perio
 
     Returns:
         tuple: (slowk, slowd)
+
+    Default parameters:
+        - fastk_period: 14
+        - slowk_period: 3
+        - slowd_period: 3
     """
     slowk, slowd = talib.STOCH(high, low, close, fastk_period=fastk_period, slowk_period=slowk_period, slowd_period=slowd_period)
-    slowk.name = f"{ticker}_StochK_{fastk_period}"
-    slowd.name = f"{ticker}_StochD_{slowd_period}"
+    slowk.name = f"{ticker}_StochK{fastk_period}"
+    slowd.name = f"{ticker}_StochD{slowd_period}"
     
     return slowk, slowd
 
@@ -164,11 +195,15 @@ def commodity_channel_index(high, low, close, ticker, timeperiod=20):
 
     Returns:
         pd.Series: CCI values.
+
+    Default parameters:
+        - timeperiod: 20
     """
     cci = talib.CCI(high, low, close, timeperiod=timeperiod)
-    cci.name = f"{ticker}_CCI_{timeperiod}"
+    cci.name = f"{ticker}_CCI{timeperiod}"
     return cci
 
+    
 def williams_percent_r(high, low, close, ticker, timeperiod=14):
     """
     Computes the Williams %R, a momentum indicator that measures overbought and oversold levels.
@@ -184,8 +219,65 @@ def williams_percent_r(high, low, close, ticker, timeperiod=14):
 
     Returns:
         pd.Series: Williams %R values.
+
+    Default parameters:
+        - timeperiod: 14
     """
     willr = talib.WILLR(high, low, close, timeperiod=timeperiod)
-    willr.name = f"{ticker}_WILLR_{timeperiod}"
+    willr.name = f"{ticker}_WILLR{timeperiod}"
     return willr
 
+
+def create_features(ticker_eqt, ticker_cpy, df_equity, df_crypto, config):
+    price_pairs = [ticker_eqt, ticker_cpy]
+    list_indicators = []
+
+    high = data.process_pairs_series(ticker_eqt, ticker_cpy, df_equity.reset_index(), df_crypto.reset_index(), 'High')
+    low = data.process_pairs_series(ticker_eqt, ticker_cpy, df_equity.reset_index(), df_crypto.reset_index(), 'Low')
+    close = data.process_pairs_series(ticker_eqt, ticker_cpy, df_equity.reset_index(), df_crypto.reset_index(), 'Close')
+
+    for ticker in price_pairs:
+        if 'ema' in config and isinstance(config['ema'], list):
+            for timeperiod in config['ema']:
+                list_indicators.append(
+                    exponential_moving_average(close[ticker], ticker, timeperiod)
+                )
+
+        if 'macd' in config:
+            macd, macdsignal, macdhist = moving_average_convergence_divergence(
+                close[ticker], ticker, config['macd']['fast'], config['macd']['slow'], config['macd']['signal']
+            )
+            list_indicators.append(macd)
+
+        if 'rsi' in config and isinstance(config['rsi'], list):
+            for timeperiod in config['rsi']:
+                list_indicators.append(
+                    relative_strength_index(close[ticker], ticker, timeperiod)
+                )
+
+        if 'bb' in config:
+            upper, middle, lower = bollinger_bands(
+                close[ticker], ticker, config['bb']['timeperiod'], config['bb']['nbdevup'], config['bb']['nbdevdn']
+            )
+            list_indicators.extend([upper, middle, lower])
+
+        if 'atr' in config:
+            atr = average_true_range(high[ticker], low[ticker], close[ticker], ticker, config['atr']['timeperiod'])
+            list_indicators.append(atr)
+
+        if 'stoch' in config:
+            slowk, slowd = stochastic_oscillator(
+                high[ticker], low[ticker], close[ticker], ticker,
+                config['stoch']['fastk_period'], config['stoch']['slowk_period'], config['stoch']['slowd_period']
+            )
+            list_indicators.extend([slowk, slowd])
+
+        if 'cci' in config:
+            cci = commodity_channel_index(high[ticker], low[ticker], close[ticker], ticker, config['cci']['timeperiod'])
+            list_indicators.append(cci)
+
+        if 'willr' in config:
+            willr = williams_percent_r(high[ticker], low[ticker], close[ticker], ticker, config['willr']['timeperiod'])
+            list_indicators.append(willr)
+
+    return pd.DataFrame(list_indicators).T
