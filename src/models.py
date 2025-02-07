@@ -27,7 +27,7 @@ def get_memory_usage():
     return process.memory_info().rss / 1024**2
 
 
-def ridge_regression(df:pd.DataFrame, alpha:float=1.0, s:float=2.0, solver:str='auto'):
+def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0, s:float=2.0, solver:str='auto'):
     '''
     Runs a Ridge Regression model on the input data.
 
@@ -35,6 +35,8 @@ def ridge_regression(df:pd.DataFrame, alpha:float=1.0, s:float=2.0, solver:str='
     ___________
     df (pd.DataFrame):
         DataFrame with features and target variable
+    p (str):
+        pair to trade, separated with space
     alpha (float, default=1.0):
         Ridge Regression regularization parameter, must be ≥0
     s (float, default=2.0):
@@ -62,6 +64,8 @@ def ridge_regression(df:pd.DataFrame, alpha:float=1.0, s:float=2.0, solver:str='
 
         X = df.drop(['NormalizedSpread'], axis=1)
         y = df['NormalizedSpread']
+
+        tickerX, tickerY = p.split(' ')
 
         # Train-Validation split 80:20
         test_size = 0.2
@@ -92,14 +96,16 @@ def ridge_regression(df:pd.DataFrame, alpha:float=1.0, s:float=2.0, solver:str='
         log.info(f'Ridge Regression with alpha={alpha} MSE: {mse}')
 
         # Interpret forecast as trading signals
-        signals = np.where(y_pred>s, 'Sell A, Buy B',
-                          np.where(y_pred<-1*s, 'Buy A, Sell B',
-                                  'No Trade'))
+        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
+                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
+                                  'No action'))
 
         df_test = X_test.copy()
         df_test['NormalizedSpread'] = y_test
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
+        df_test['Pair'] = p
+        df_test['Model'] = 'Ridge Regression'
 
         return ridge, mse, df_test, time_usage, memory_usage
     except Exception as e:
@@ -108,7 +114,7 @@ def ridge_regression(df:pd.DataFrame, alpha:float=1.0, s:float=2.0, solver:str='
         return None, np.inf, pd.DataFrame(), 0, 0
 
 
-def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
+def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
                        n_estimators:int=100, max_depth:int=3, s:float=2.0):
     '''
     Runs an XGBoost model on the input data.
@@ -117,6 +123,8 @@ def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
     ___________
     df (pd.DataFrame):
         DataFrame with features and target variable
+    p (str):
+        pair to trade, separated with space
     learning_rate (float, default=0.1):
         Step size shrinkage used in updating weights
     n_estimators (int, default=100):
@@ -145,6 +153,8 @@ def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
         
         X = df.drop(['NormalizedSpread'], axis=1)
         y = df['NormalizedSpread']
+
+        tickerX, tickerY = p.split(' ')
 
         # Train-Validation split 80:20
         test_size = 0.2
@@ -177,14 +187,16 @@ def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
         log.info(f'XGBoost with learning_rate={learning_rate}, n_estimators={n_estimators}, max_depth={max_depth} MSE: {mse}')
 
         # Interpret forecast as trading signals
-        signals = np.where(y_pred>s, 'Sell A, Buy B',
-                          np.where(y_pred<-1*s, 'Buy A, Sell B',
-                                  'No Trade'))
+        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
+                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
+                                  'No action'))
         
         df_test = X_test.copy()
         df_test['NormalizedSpread'] = y_test
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
+        df_test['Pair'] = p
+        df_test['Model'] = 'XGBoost'
         
         return xgb_model, mse, df_test, time_usage, memory_usage
     except Exception as e:
@@ -194,10 +206,10 @@ def xgboost_regression(df:pd.DataFrame, learning_rate:float=0.1,
 
 
 # @tf.function(reduce_retracing=True)
-def lstm_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
-                     units: int = 50, dropout_rate: float = 0.2,
-                     learning_rate: float = 0.001, epochs: int = 50,
-                     batch_size: int = 32):
+def lstm_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
+                     units:int=50, dropout_rate:float=0.2,
+                     learning_rate:float=0.001, epochs:int=50,
+                     batch_size:int=32):
     '''
     Runs an LSTM model on the input data.
 
@@ -205,6 +217,8 @@ def lstm_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
     ___________
     df (pd.DataFrame):
         DataFrame with features and target variable
+    p (str):
+        pair to trade, separated with space
     lookback (int, default=10):
         number of previous time steps used as input for LSTM
     s (float, default=2.0):
@@ -234,6 +248,8 @@ def lstm_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         df = df.copy()
         X = df.drop(['NormalizedSpread'], axis=1).values
         y = df['NormalizedSpread'].values
+
+        tickerX, tickerY = p.split(' ')
         
         # Convert data to sequences
         X_seq, y_seq = [], []
@@ -274,13 +290,15 @@ def lstm_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         log.info(f'LSTM MSE: {mse}')
         
         # Generate trading signals
-        signals = np.where(y_pred>s, 'Sell A, Buy B',
-                           np.where(y_pred<-1*s, 'Buy A, Sell B',
-                                    'No Trade'))
+        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
+                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
+                                  'No action'))
         
         df_test = df.iloc[-test_size:].copy()
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
+        df_test['Pair'] = p
+        df_test['Model'] = 'LSTM'
         
         return model, mse, df_test, time_usage, memory_usage
     except Exception as e:
@@ -290,10 +308,10 @@ def lstm_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
 
 
 # @tf.function(reduce_retracing=True)
-def rnn_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
-                    units: int = 50, dropout_rate: float = 0.2,
-                    learning_rate: float = 0.001, epochs: int = 50,
-                    batch_size: int = 32):
+def rnn_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
+                    units:int=50, dropout_rate:float=0.2,
+                    learning_rate:float=0.001, epochs:int=50,
+                    batch_size:int=32):
     '''
     Runs an RNN model on the input data.
 
@@ -301,6 +319,8 @@ def rnn_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
     ___________
     df (pd.DataFrame):
         DataFrame with features and target variable
+    p (str):
+        pair to trade, separated with space
     lookback (int, default=10):
         number of previous time steps used as input for RNN
     s (float, default=2.0):
@@ -330,6 +350,8 @@ def rnn_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         df = df.copy()
         X = df.drop(['NormalizedSpread'], axis=1).values
         y = df['NormalizedSpread'].values
+
+        tickerX, tickerY = p.split(' ')
         
         # Convert data to sequences
         X_seq, y_seq = [], []
@@ -370,13 +392,15 @@ def rnn_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         log.info(f'RNN MSE: {mse}')
         
         # Generate trading signals
-        signals = np.where(y_pred>s, 'Sell A, Buy B',
-                           np.where(y_pred<-1*s, 'Buy A, Sell B',
-                                    'No Trade'))
+        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
+                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
+                                  'No action'))
         
         df_test = df.iloc[-test_size:].copy()
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
+        df_test['Pair'] = p
+        df_test['Model'] = 'RNN'
         
         return model, mse, df_test, time_usage, memory_usage
     except Exception as e:
@@ -386,9 +410,9 @@ def rnn_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
 
 
 # @tf.function(reduce_retracing=True)
-def transformer_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
-                           num_heads: int = 2, ff_dim: int = 64, dropout_rate: float = 0.1,
-                           learning_rate: float = 0.001, epochs: int = 50, batch_size: int = 32):
+def transformer_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
+                           num_heads:int=2, ff_dim:int=64, dropout_rate:float=0.1,
+                           learning_rate:float=0.001, epochs:int=50, batch_size:int=32):
     '''
     Runs a Transformer model on the input data.
 
@@ -396,6 +420,8 @@ def transformer_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
     ___________
     df (pd.DataFrame):
         DataFrame with features and target variable
+    p (str):
+        pair to trade, separated with space
     lookback (int, default=10):
         Number of previous time steps used as input for the Transformer model
     s (float, default=2.0):
@@ -427,6 +453,8 @@ def transformer_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         df = df.copy()
         X = df.drop(['NormalizedSpread'], axis=1).values
         y = df['NormalizedSpread'].values
+
+        tickerX, tickerY = p.split(' ')
 
         # Convert data to sequences
         X_seq, y_seq = [], []
@@ -481,13 +509,15 @@ def transformer_regression(df: pd.DataFrame, lookback: int = 10, s: float = 2.0,
         log.info(f'Transformer MSE: {mse}')
 
         # Generate trading signals
-        signals = np.where(y_pred > s, 'Sell A, Buy B',
-                           np.where(y_pred < -1 * s, 'Buy A, Sell B',
-                                    'No Trade'))
+        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
+                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
+                                  'No action'))
 
         df_test = df.iloc[-test_size:].copy()
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
+        df_test['Pair'] = p
+        df_test['Model'] = 'Transformer'
 
         return model, mse, df_test, time_usage, memory_usage
     except Exception as e:
