@@ -114,7 +114,7 @@ def get_crypto_data(client:Client=None) -> pd.DataFrame:
 
 # Helper functions to create a Pandas dataframe with 2 different series
 def process_pairs_series(seriesX, seriesY,
-                         dfX=None, dfY=None, df=None) -> pd.DataFrame:
+                         dfX=None, dfY=None, df=None, data_type='Close') -> pd.DataFrame:
     '''
     Creates Pandas DataFrame with the desired series aligned.
 
@@ -135,24 +135,24 @@ def process_pairs_series(seriesX, seriesY,
     try:
         # Using separate equity and crypto dfs
         if (dfX is not None) & (dfY is not None):
-            priceX = (pd.DataFrame(dfX[dfX['Symbol']==seriesX][['Close', 'OpenTime']])
+            priceX = (pd.DataFrame(dfX[dfX['Symbol']==seriesX][[data_type, 'OpenTime']])
                       .set_index('OpenTime')
                     #   .rename(index=[seriesX])
                       )
             t00 = priceX.index[0]
-            priceY = (pd.DataFrame(dfY[dfY['Symbol']==seriesY][['Close', 'OpenTime']])
+            priceY = (pd.DataFrame(dfY[dfY['Symbol']==seriesY][[data_type, 'OpenTime']])
                       .set_index('OpenTime')
                     #   .rename(index=[seriesY])
                       )
             t10 = priceY.index[0]
         # Using df of all data
         elif df is not None:
-            priceX = (pd.DataFrame(df[df['Symbol']==seriesX][['Close', 'OpenTime']])
+            priceX = (pd.DataFrame(df[df['Symbol']==seriesX][[data_type, 'OpenTime']])
                       .set_index('OpenTime')
                     #   .rename(index=seriesX)
                       )
             t00 = priceX.index[0]
-            priceY = (pd.DataFrame(df[df['Symbol']==seriesY][['Close', 'OpenTime']])
+            priceY = (pd.DataFrame(df[df['Symbol']==seriesY][[data_type, 'OpenTime']])
                       .set_index('OpenTime')
                     #   .rename(index=seriesY)
                     )
