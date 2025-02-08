@@ -1,3 +1,4 @@
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import pandas as pd
 import talib
 import data
@@ -282,7 +283,60 @@ def calculate_spread(close, return_dataframe=False):
         return norm_spread
 
 
-def create_features(ticker_eqt, ticker_cpy, df_equity, df_crypto, config):
+def create_features(ticker_eqt, ticker_cpy, df_equity, df_crypto, config, dropna=False):
+    """
+    Generate technical indicators and spread features for a given equity-crypto pair.
+
+    Parameters:
+    ----------
+    ticker_eqt : str
+        The ticker symbol for the equity asset.
+    ticker_cpy : str
+        The ticker symbol for the crypto asset.
+    df_equity : pd.DataFrame
+        DataFrame containing equity price data with columns such as 'High', 'Low', and 'Close'.
+    df_crypto : pd.DataFrame
+        DataFrame containing cryptocurrency price data with similar columns.
+    config : dict
+        Configuration dictionary specifying which indicators to compute and their parameters.
+        Supported indicators:
+        - 'ema' (list of time periods): Exponential Moving Average (EMA)
+        - 'macd' (dict): Moving Average Convergence Divergence (MACD)
+          - 'fast': Fast period
+          - 'slow': Slow period
+          - 'signal': Signal period
+        - 'rsi' (list of time periods): Relative Strength Index (RSI)
+        - 'bb' (dict): Bollinger Bands
+          - 'timeperiod': Period for calculation
+          - 'nbdevup': Number of standard deviations for upper band
+          - 'nbdevdn': Number of standard deviations for lower band
+        - 'atr' (dict): Average True Range (ATR)
+          - 'timeperiod': Period for ATR calculation
+        - 'stoch' (dict): Stochastic Oscillator
+          - 'fastk_period': %K period
+          - 'slowk_period': %D period (smoothing)
+          - 'slowd_period': %D period (further smoothing)
+        - 'cci' (dict): Commodity Channel Index (CCI)
+          - 'timeperiod': Period for calculation
+        - 'willr' (dict): Williams %R
+          - 'timeperiod': Period for calculation
+    dropna : bool, optional
+        Whether to drop NaN values from the resulting feature set. Default is False.
+
+    Returns:
+    -------
+    pd.DataFrame
+        A DataFrame containing the calculated technical indicators and the spread between the
+        given equity and cryptocurrency assets.
+
+    Notes:
+    ------
+    - The function first extracts high, low, and close prices for the asset pair.
+    - It then computes various technical indicators based on the provided `config`.
+    - The spread between the closing prices of the two assets is also computed.
+    - If `dropna` is True, rows containing NaN values are removed.
+    """
+    
     price_pairs = [ticker_eqt, ticker_cpy]
     list_indicators = []
 
@@ -378,4 +432,44 @@ def create_features(ticker_eqt, ticker_cpy, df_equity, df_crypto, config):
     # compute pair spread on Close
     list_indicators.append(calculate_spread(close))
 
-    return pd.DataFrame(list_indicators).T
+    feat = pd.DataFrame(list_indicators).T
+
+    if dropna:
+        feat = feat.dropna()
+    return feat
+
+
+def normalized_features(feat, scaler="StandardScaler"):
+    """
+    Normalize the given feature DataFrame using the specified scaler.
+
+    Parameters:
+    feat (pd.DataFrame): The DataFrame containing features to be normalized.
+    scaler (str): The type of scaler to use. Options are:
+        - 'StandardScaler' (default): Standardizes features (zero mean, unit variance).
+        - 'MinMax': Scales features to range [0,1].
+
+    Returns:
+    tuple: (normalized DataFrame, scaler object)
+    """
+    feat = feat.copy()
+
+    # Drop 'NormalizedSpread' if it exists
+    if "NormalizedSpread" in feat.columns:
+        feat = feat.drop(columns=["NormalizedSpread"])
+
+    # Select scaler
+    if scaler == "StandardScaler":
+        scaler_obj = StandardScaler()
+    elif scaler == "MinMax":
+        scaler_obj = MinMaxScaler()
+    else:
+        raise ValueError("Invalid scaler type. Choose 'StandardScaler' or 'MinMax'.")
+
+    # Fit and transform the data
+    feat_scaled = scaler_obj.fit_transform(feat)
+
+    # Convert back to DataFrame with same column names
+    feat_scaled_df = pd.DataFrame(feat_scaled, index=feat.index, columns=feat.columns)
+
+    return feat_scaled_df, scaler_obj
