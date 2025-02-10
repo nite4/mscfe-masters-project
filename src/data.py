@@ -16,12 +16,12 @@ def read_excel_sheets(file_path:str='data.xlsx') -> pd.DataFrame:
     Reads Excel data from the given file path.
 
     Parameters:
-    -----------
+    ___________
     file_path (str):
         string containing the file path to process.
     
     Returns:
-    --------
+    ________
     df (pd.DataFrame):
         DataFrame containing the data from the Excel file.
     '''
@@ -65,7 +65,7 @@ def get_crypto_data(client:Client=None) -> pd.DataFrame:
     DOGEUSDT, USDCUSDT, ADAUSDT, TRXUSDT and AVAXUSDT.
 
     Parameters:
-    -----------
+    ___________
     client (binance.Client):
         Binance API client.
     
