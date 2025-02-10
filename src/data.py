@@ -190,12 +190,12 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
     try:
         priceX = price_pairs.iloc[:, 0]
         priceY = price_pairs.iloc[:, 1]
-        
+
         tickerX = priceX.name
         tickerY = priceY.name
 
         model = sm.OLS(priceY, sm.add_constant(priceX)).fit()
-        beta = model.params.iloc[1] #hedge ratio
+        beta = model.params.iloc[1] # Hedge ratio
         spread = priceY - beta * priceX
         # residuals = model.resid
 
@@ -204,10 +204,10 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
 
         # ADF test for the Spread
         adf_result = adfuller(spread)
-        
-        # cointegration of both series
+
+        # Cointegration of both series
         coint_result = coint(priceX, priceY)
-        
+
         if print_stats:
             print(f'Pair: {tickerX} & {tickerY}')
             print(f'Correlation: {correlation:.3f}')
@@ -234,7 +234,7 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
 
             # Create a 1x3 subplot layout
             fig, axes = plt.subplots(1, 3, figsize=(21, 6))  # 1 row, 3 columns
-            
+
             # Plot 1: Spread and Trading Thresholds
             axes[0].plot(spread, label='Spread')
             axes[0].axhline(spread_mean, color='red', linestyle='--', label='Mean')
@@ -249,7 +249,7 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
             # axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
             axes[0].xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
             plt.setp(axes[0].xaxis.get_majorticklabels(), rotation=45, ha='right')
-            
+
             # Plot 2: Z-Score of Spread
             axes[1].plot(z_score, label='Z-Score')
             axes[1].axhline(std, color='green', linestyle='--', label='Upper Threshold')
@@ -262,7 +262,7 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
             # axes[1].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
             axes[1].xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
             plt.setp(axes[1].xaxis.get_majorticklabels(), rotation=45, ha='right')
-            
+
             # Plot 3: Normalized Prices
             price_normalized = price_pairs / price_pairs.iloc[0]
             axes[2].plot(price_normalized[tickerX], label=f'{tickerX} (Normalized)', linestyle='-')
@@ -274,7 +274,7 @@ def run_cointegration_test(price_pairs, print_stats=False, plotting=False, std=2
             # axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
             axes[2].xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
             plt.setp(axes[2].xaxis.get_majorticklabels(), rotation=45, ha='right')
-            
+
             plt.tight_layout()
             plt.savefig(f'output/cointegration_test_{tickerX}_{tickerY}.png')
             plt.show();
@@ -328,10 +328,12 @@ def plot_spread(df, X, Y, s:float=2.0, ax=None):
                     marker='.',
                     s=11,
                     zorder=2)
+
         if (len(X)>6) & (len(Y)>6):
             ax.xaxis.set_major_locator(plt.IndexLocator(base=1000, offset=0))
         else:
             ax.xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
+
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right', size=6)
         plt.title(f'Normalized Spread of {X} and {Y} - Training Set')
         plt.xlabel('Time')

@@ -6,7 +6,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from utils import log
 
 
-def exponential_moving_average(series:pd.Series, ticker:str, timeperiod):
+def exponential_moving_average(series:pd.Series, ticker:str, timeperiod:int):
     '''
     Calculates Exponential Moving Average (EMA) of a time series data.
     The Exponential Moving Average (EMA) is a weighted moving average
@@ -349,15 +349,15 @@ def calculate_spread(close:pd.Series, return_dataframe:bool=False):
     2    104    103       1             1.0
     '''
     try:
-        _close = close.copy()
+        df = close.copy()
 
-        spread = close.iloc[:, 0] - close.iloc[:, 1]
+        spread = df.iloc[:, 0] - df.iloc[:, 1]
         norm_spread = (spread - spread.mean()) / spread.std()
 
         if return_dataframe:
-            _close['Spread'] = spread
-            _close['NormalizedSpread'] = norm_spread
-            return _close
+            df['Spread'] = spread
+            df['NormalizedSpread'] = norm_spread
+            return df
         else:
             norm_spread.name = 'NormalizedSpread'
             return norm_spread
@@ -440,7 +440,7 @@ def create_features(ticker_eqt:str, ticker_cpy:str, df_equity:pd.DataFrame,
             df_crypto.reset_index(),
             'Close',
         )
-
+        
         for ticker in price_pairs:
             if 'ema' in config and isinstance(config['ema'], list):
                 for timeperiod in config['ema']:
@@ -517,8 +517,8 @@ def create_features(ticker_eqt:str, ticker_cpy:str, df_equity:pd.DataFrame,
                 list_indicators.append(willr)
 
         # Compute pair spread on Close
-        list_indicators.append(calculate_spread(close))
         feat = pd.DataFrame(list_indicators).T
+        feat.loc[:, 'Spread'] = close.iloc[:, 0] - close.iloc[:, 1]
 
         if dropna:
             feat = feat.dropna()
@@ -530,7 +530,7 @@ def create_features(ticker_eqt:str, ticker_cpy:str, df_equity:pd.DataFrame,
         return pd.DataFrame()
 
 
-def normalized_features(feat:pd.DataFrame, scaler:str='StandardScaler'):
+def normalize_features(feat:pd.DataFrame, scaler:str='StandardScaler'):
     '''
     Normalize the given feature DataFrame using the specified scaler.
 
@@ -560,14 +560,16 @@ def normalized_features(feat:pd.DataFrame, scaler:str='StandardScaler'):
         elif scaler == 'MinMax':
             scaler_obj = MinMaxScaler()
         else:
-            raise ValueError('Invalid scaler type. Choose 'StandardScaler' or 'MinMax'.')
+            raise ValueError("Invalid scaler type. Choose 'StandardScaler' or 'MinMax'.")
 
         # Fit and transform the data
         feat_scaled = scaler_obj.fit_transform(feat)
 
         # Convert back to DataFrame with same column names
-        feat_scaled_df = pd.DataFrame(feat_scaled, index=feat.index, columns=feat.columns)
-        log.info(f'Features normalized successfully.')
+        feat_scaled_df = pd.DataFrame(feat_scaled,
+                                      index=feat.index,
+                                      columns=feat.columns)
+        log.info('Features normalized successfully.')
         return feat_scaled_df, scaler_obj
     except Exception as e:
         print(f'Failed to normalize features:{str(e)}')
