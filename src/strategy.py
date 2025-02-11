@@ -30,7 +30,7 @@ def calculate_position_sizes(initial_investment:float=10000,
         max_position = initial_investment*max_pct  # 25% limit per asset
         position_sizes = {}
 
-        for column in prices_df.select_dtypes(float).columns:
+        for column in prices_df.columns:
             position_sizes[column] = max_position/prices_df[column].iloc[0]
 
         return position_sizes
@@ -60,7 +60,7 @@ def calculate_portfolio_exposure(current_positions:dict,
     float: Current portfolio exposure as percentage.
     '''
     try:
-        exposure = sum(abs(pos * prices[asset])
+        exposure = sum(abs(pos*prices[asset])
                        for asset, pos in current_positions.items())
         return exposure / initial_investment
     except Exception as e:
@@ -130,8 +130,8 @@ def execute_trades(signal:str, prices:pd.Series,
         return current_positions, 0
 
 
-def run_strategy(df:pd.DataFrame, initial_investment:float=10000, 
-                 risk_free_rate:float=0.02) -> dict:
+def run_strategy(df:pd.DataFrame, prices_df:pd.DataFrame,
+                 initial_investment:float=10000, risk_free_rate:float=0.02) -> dict:
     '''
     Simulates trading decisions based on the forecasted normalized spread.
 
@@ -161,12 +161,9 @@ def run_strategy(df:pd.DataFrame, initial_investment:float=10000,
         cash = initial_investment
         daily_returns = []
 
-        position_sizes = calculate_position_sizes(initial_investment,
-                                                  df.drop(columns=exclude_columns,
-                                                          errors='ignore'))
-
+        position_sizes = calculate_position_sizes(initial_investment, prices_df)
         for i in range(1, len(df)):
-            signal = df['PredictedSignal'].iloc[i - 1]
+            signal = df['PredictedSignal'].iloc[i-1]
             new_positions, cash_flow = execute_trades(signal,
                                                       df.iloc[i].drop(labels=exclude_columns,
                                                                       errors='ignore'),

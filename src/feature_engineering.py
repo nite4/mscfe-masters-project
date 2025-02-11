@@ -428,10 +428,12 @@ def create_features(ticker_eqt:str, ticker_cpy:str, df_equity:pd.DataFrame,
         list_indicators = []
 
         high = data.process_pairs_series(
-            ticker_eqt, ticker_cpy, df_equity.reset_index(), df_crypto.reset_index(), 'High'
+            ticker_eqt, ticker_cpy, df_equity.reset_index(),
+            df_crypto.reset_index(), 'High'
         )
         low = data.process_pairs_series(
-            ticker_eqt, ticker_cpy, df_equity.reset_index(), df_crypto.reset_index(), 'Low'
+            ticker_eqt, ticker_cpy, df_equity.reset_index(),
+            df_crypto.reset_index(), 'Low'
         )
         close = data.process_pairs_series(
             ticker_eqt,
@@ -440,7 +442,7 @@ def create_features(ticker_eqt:str, ticker_cpy:str, df_equity:pd.DataFrame,
             df_crypto.reset_index(),
             'Close',
         )
-        
+
         for ticker in price_pairs:
             if 'ema' in config and isinstance(config['ema'], list):
                 for timeperiod in config['ema']:

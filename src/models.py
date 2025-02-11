@@ -619,7 +619,7 @@ def plot_model_forecasts(ridge_test_df:pd.DataFrame=None, xgb_test_df:pd.DataFra
                    )
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right', size=6)
         plt.tight_layout()
-        # plt.savefig(f'output/forecast_{tickerX}_{tickerY}.png')
+        plt.savefig(f'output/forecast_{tickerX}_{tickerY}.png')
         return ax
     except Exception as e:
         print(f'Failed to plot model forecasts: {str(e)}')

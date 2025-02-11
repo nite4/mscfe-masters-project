@@ -1,9 +1,11 @@
 keras
 matplotlib
-numpy
+mkl
+numpy<2.0
 openpyxl
-pandas
+pandas<2.0.0
 plotly
+pypickle
 python-binance
 requests
 seaborn
