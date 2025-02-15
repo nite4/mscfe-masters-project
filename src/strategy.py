@@ -10,7 +10,7 @@ class Strategy:
     Trading Strategy Class
 
     Attributes:
-    -----------
+    ___________
     initial_capital : float
         The initial capital allocated for trading.
     m_threshold : int
@@ -25,7 +25,8 @@ class Strategy:
         A record of all executed trades.
     '''
 
-    def __init__(self, initial_capital=10000, m_threshold=3, max_exposure=0.25, max_trade_size=1000, close_threshold=144):
+    def __init__(self, initial_capital=10000, m_threshold=3,
+                 max_exposure=0.25, max_trade_size=1000, close_threshold=144):
         '''
         Initializes the trading strategy with given parameters.
 
@@ -70,49 +71,51 @@ class Strategy:
         open_positions = {}
         position_age = {}
 
+        # Extract relevant trading signal columns
+        signal_columns = ['PredictedSignal', 'Pair']
+        df = df[signal_columns]
+
         for index, row in df.iterrows():
-            for asset in df.columns:
-                if asset == 'OpenTime':
-                    continue
+            asset = row['Pair']
+            signal = row['PredictedSignal']
 
-                signal = row[asset]
-                if asset not in signals:
-                    signals[asset] = []
+            if asset not in signals:
+                signals[asset] = []
 
-                # Track signal confirmation threshold
-                if signal != 0:
-                    signals[asset].append(signal)
-                    if len(signals[asset]) >= self.m_threshold and all(x == signal for x in signals[asset][-self.m_threshold:]):
-                        confirmed_signals[asset] = signal
-                else:
-                    signals[asset] = []
-                    confirmed_signals.pop(asset, None)
+            # Track signal confirmation threshold
+            if signal != 'No action':
+                signals[asset].append(signal)
+                if len(signals[asset]) >= self.m_threshold and all(x == signal for x in signals[asset][-self.m_threshold:]):
+                    confirmed_signals[asset] = signal
+            else:
+                signals[asset] = []
+                confirmed_signals.pop(asset, None)
 
-                # Trading logic
-                if asset in confirmed_signals:
-                    trade_signal = confirmed_signals[asset]
+            # Trading logic
+            if asset in confirmed_signals:
+                trade_signal = confirmed_signals[asset]
 
-                    if trade_signal == 1 and asset not in open_positions:
-                        trade_size = min(self.max_trade_size, self.max_exposure * portfolio_value)
-                        open_positions[asset] = trade_size
-                        position_age[asset] = 0
-                        portfolio_value -= trade_size
-                        self.trade_history.append((index, asset, 'BUY', trade_size))
+                if trade_signal == 1 and asset not in open_positions:
+                    trade_size = min(self.max_trade_size, self.max_exposure * portfolio_value)
+                    open_positions[asset] = trade_size
+                    position_age[asset] = 0
+                    portfolio_value -= trade_size
+                    self.trade_history.append((index, asset, 'Buy', trade_size))
 
-                    elif trade_signal == -1 and asset in open_positions:
-                        portfolio_value += open_positions[asset]
-                        del open_positions[asset]
-                        del position_age[asset]
-                        self.trade_history.append((index, asset, 'SELL', trade_size))
+                elif trade_signal == -1 and asset in open_positions:
+                    portfolio_value += open_positions[asset]
+                    del open_positions[asset]
+                    del position_age[asset]
+                    self.trade_history.append((index, asset, 'Sell', trade_size))
 
-                # Forced closure after X periods if no opposite signal appears
-                if asset in open_positions:
-                    position_age[asset] += 1
-                    if position_age[asset] >= self.close_threshold:
-                        portfolio_value += open_positions[asset]
-                        del open_positions[asset]
-                        del position_age[asset]
-                        self.trade_history.append((index, asset, 'FORCED SELL', trade_size))
+            # Forced closure after X periods if no opposite signal appears
+            if asset in open_positions:
+                position_age[asset] += 1
+                if position_age[asset] >= self.close_threshold:
+                    portfolio_value += open_positions[asset]
+                    del open_positions[asset]
+                    del position_age[asset]
+                    self.trade_history.append((index, asset, 'Force Sell', trade_size))
 
         return {
             'Final Portfolio Value': portfolio_value,

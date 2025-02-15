@@ -45,7 +45,7 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
     solver (str, default='auto'):
         Ridge Regression solver; available options as in
         scikit-learn Ridge (https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html)
-    
+
     Returns:
     ________
     ridge (sklearn.linear_model.Ridge):
@@ -59,7 +59,7 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
     try:
         if alpha < 0:
             raise ValueError('Alpha must be greater than or equal to 0.')
-        
+
         # Create a copy of the dataframe to avoid SettingWithCopyWarning
         df = df.copy()
 
