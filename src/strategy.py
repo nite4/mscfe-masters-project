@@ -5,201 +5,116 @@ import portfolio_performance as pp
 from utils import log
 
 
-def calculate_position_sizes(initial_investment:float=10000,
-                             prices_df:pd.DataFrame=None,
-                             max_pct:float=0.25) -> dict:
+class Strategy:
     '''
-    Calculate maximum position sizes for each asset ensuring no more than
-    `max_pct` allocation.
+    Trading Strategy Class
 
-    Parameters:
-    ___________
-    initial_investment (float, default=10,000):
-        Initial portfolio value.
-    prices_df (pd.DataFrame):
-        DataFrame containing asset prices.
-    max_pct (float, default=0.25):
-        Maximum allowed percentage to allocate into a single asset.
-
-    Returns:
-    ________
-    position_sizes (dict):
-        Maximum position sizes for each asset.
+    Attributes:
+    -----------
+    initial_capital : float
+        The initial capital allocated for trading.
+    m_threshold : int
+        The number of consecutive signals required to confirm a trade.
+    max_exposure : float
+        The maximum percentage of total portfolio value allocated to a single asset.
+    max_trade_size : float
+        The maximum dollar amount allocated per trade.
+    close_threshold : int
+        The number of periods after which a position is forcefully closed if no opposite signal appears.
+    trade_history : list
+        A record of all executed trades.
     '''
-    try:
-        max_position = initial_investment*max_pct  # 25% limit per asset
-        position_sizes = {}
 
-        for column in prices_df.columns:
-            position_sizes[column] = max_position/prices_df[column].iloc[0]
+    def __init__(self, initial_capital=10000, m_threshold=3, max_exposure=0.25, max_trade_size=1000, close_threshold=144):
+        '''
+        Initializes the trading strategy with given parameters.
 
-        return position_sizes
-    except Exception as e:
-        print(f'Failed to calculate position sizes: {str(e)}')
-        log.error(f'Failed to calculate position sizes: {str(e)}')
-        return {}
+        Parameters:
+        ___________
+        initial_capital (float, default=10000):
+            The starting capital for the strategy.
+        m_threshold (int, default=3):
+            The required number of consecutive signals to confirm a trade.
+        max_exposure (float, default=0.25):
+            The maximum exposure allowed per asset as a fraction of total portfolio value.
+        max_trade_size (float, default=1000):
+            The maximum position size allowed per trade in USD.
+        close_threshold (int, default=144):
+            The maximum number of periods a trade can stay open before forced closure after 12 pair trading hours.
+        '''
+        self.capital = initial_capital
+        self.positions = {}
+        self.m_threshold = m_threshold
+        self.max_exposure = max_exposure
+        self.max_trade_size = max_trade_size
+        self.close_threshold = close_threshold
+        self.trade_history = []
 
+    def run_strategy(self, df):
+        '''
+        Executes the trading strategy on a given dataset.
 
-def calculate_portfolio_exposure(current_positions:dict,
-                                 prices:pd.Series,
-                                 initial_investment:float=10000) -> float:
-    '''
-    Calculate current portfolio exposure as a percentage of initial investment.
+        Parameters:
+        ___________
+        df (pandas.DataFrame):
+            The input dataframe containing trading signals for various assets.
 
-    Parameters:
-    ___________
-    current_positions (dict):
-        Current positions in the portfolio.
-    prices (pd.Series):
-        Current prices for the assets.
-    initial_investment (float, default=10,000):
-        Initial portfolio value.
+        Returns:
+        ________
+        dict:
+            A dictionary containing the final portfolio value and trade history.
+        '''
+        signals = {}
+        confirmed_signals = {}
+        portfolio_value = self.capital
+        open_positions = {}
+        position_age = {}
 
-    Returns:
-    ________
-    float: Current portfolio exposure as percentage.
-    '''
-    try:
-        exposure = sum(abs(pos*prices[asset])
-                       for asset, pos in current_positions.items())
-        return exposure / initial_investment
-    except Exception as e:
-        print(f'Failed to calculate portfolio exposure: {str(e)}')
-        log.error(f'Failed to calculate portfolio exposure: {str(e)}')
-        return 0
+        for index, row in df.iterrows():
+            for asset in df.columns:
+                if asset == 'OpenTime':
+                    continue
 
+                signal = row[asset]
+                if asset not in signals:
+                    signals[asset] = []
 
-def execute_trades(signal:str, prices:pd.Series,
-                   position_sizes:dict, current_positions:dict,
-                   initial_investment:float=10000) -> tuple:
-    '''
-    Execute trades based on signals and position constraints.
-
-    Parameters:
-    ___________
-    signal (str):
-        Trading signal indicating buy/sell decisions.
-    prices (pd.Series):
-        Current prices for the assets.
-    position_sizes (dict):
-        Maximum allowed position sizes.
-    current_positions (dict):
-        Current positions in the portfolio.
-    initial_investment (float, default=10,000):
-        Initial portfolio value.
-
-    Returns:
-    ________
-    new_positions, cash_flow (tuple):
-        Updated positions and cash flows from trades.
-    '''
-    try:
-        if signal == 'No action':
-            return current_positions, 0
-
-        action = signal.split(', ')
-        tickerX, tickerY = action[0].split(' ')[1], action[1].split(' ')[1]
-
-        current_exposure = calculate_portfolio_exposure(current_positions,
-                                                        prices,
-                                                        initial_investment)
-        existing_position = (current_positions.get(tickerX, 0)!=0
-                             or current_positions.get(tickerY, 0)!=0)
-
-        if not existing_position and current_exposure < 0.95:
-            new_positions = current_positions.copy()
-            trade_size_x, trade_size_y = (position_sizes.get(tickerX, 0),
-                                          position_sizes.get(tickerY, 0))
-            trade_value_x, trade_value_y = (trade_size_x*prices[tickerX],
-                                            trade_size_y*prices[tickerY])
-
-            if ((current_exposure + (trade_value_x + trade_value_y)
-                 / initial_investment) <= 1.0):
-                if 'Buy' in action[0]:
-                    new_positions[tickerX], new_positions[tickerY] = trade_size_x, -trade_size_y
+                # Track signal confirmation threshold
+                if signal != 0:
+                    signals[asset].append(signal)
+                    if len(signals[asset]) >= self.m_threshold and all(x == signal for x in signals[asset][-self.m_threshold:]):
+                        confirmed_signals[asset] = signal
                 else:
-                    new_positions[tickerX], new_positions[tickerY] = -trade_size_x, trade_size_y
+                    signals[asset] = []
+                    confirmed_signals.pop(asset, None)
 
-                cash_flow = -(new_positions[tickerX]*prices[tickerX]
-                              + new_positions[tickerY]*prices[tickerY])
-                return new_positions, cash_flow
-        return current_positions, 0
-    except Exception as e:
-        print(f'Failed to execute trades: {str(e)}')
-        log.error(f'Failed to execute trades: {str(e)}')
-        return current_positions, 0
+                # Trading logic
+                if asset in confirmed_signals:
+                    trade_signal = confirmed_signals[asset]
 
+                    if trade_signal == 1 and asset not in open_positions:
+                        trade_size = min(self.max_trade_size, self.max_exposure * portfolio_value)
+                        open_positions[asset] = trade_size
+                        position_age[asset] = 0
+                        portfolio_value -= trade_size
+                        self.trade_history.append((index, asset, 'BUY', trade_size))
 
-def run_strategy(df:pd.DataFrame, prices_df:pd.DataFrame,
-                 initial_investment:float=10000, risk_free_rate:float=0.02) -> dict:
-    '''
-    Simulates trading decisions based on the forecasted normalized spread.
+                    elif trade_signal == -1 and asset in open_positions:
+                        portfolio_value += open_positions[asset]
+                        del open_positions[asset]
+                        del position_age[asset]
+                        self.trade_history.append((index, asset, 'SELL', trade_size))
 
-    Parameters:
-    ___________
-    df (pd.DataFrame):
-        DataFrame with model predictions.
-    initial_investment (float):
-        Initial portfolio value.
-    risk_free_rate (float):
-        Annual risk-free rate for performance calculations.
+                # Forced closure after X periods if no opposite signal appears
+                if asset in open_positions:
+                    position_age[asset] += 1
+                    if position_age[asset] >= self.close_threshold:
+                        portfolio_value += open_positions[asset]
+                        del open_positions[asset]
+                        del position_age[asset]
+                        self.trade_history.append((index, asset, 'FORCED SELL', trade_size))
 
-    Returns:
-    ________
-    performance_metrics (dict):
-        Portfolio performance metrics.
-    '''
-    try:
-        exclude_columns = ['NormalizedSpread',
-                           'PredictedSpread',
-                           'PredictedSignal',
-                           'Pair',
-                           'Model']
-        portfolio_value = [initial_investment]
-        current_positions = {col: 0 for col in df.columns
-                             if col not in exclude_columns}
-        cash = initial_investment
-        daily_returns = []
-
-        position_sizes = calculate_position_sizes(initial_investment, prices_df)
-        for i in range(1, len(df)):
-            signal = df['PredictedSignal'].iloc[i-1]
-            new_positions, cash_flow = execute_trades(signal,
-                                                      df.iloc[i].drop(labels=exclude_columns,
-                                                                      errors='ignore'),
-                                                      position_sizes,
-                                                      current_positions)
-            cash += cash_flow
-            current_positions = new_positions
-            current_value = cash + sum(pos*df[asset].iloc[i]
-                                       for asset, pos
-                                       in current_positions.items())
-
-            portfolio_value.append(current_value)
-            daily_returns.append((current_value - portfolio_value[-2])
-                                 / portfolio_value[-2])
-
-        daily_returns = np.array(daily_returns)
-        performance_metrics = {
-            'Final Portfolio Value': portfolio_value[-1],
-            'Total Return': ((portfolio_value[-1] - initial_investment)
-                             / initial_investment),
-            'Annualized Return': pp.annualized_return(initial_investment,
-                                                      portfolio_value[-1],
-                                                      len(df)/252),
-            'Sharpe Ratio': pp.sharpe_ratio(daily_returns,
-                                            risk_free_rate/252),
-            'Sortino Ratio': pp.sortino_ratio(daily_returns,
-                                              risk_free_rate/252),
-            'Hit Ratio': pp.hit_ratio(daily_returns),
-            'Max Drawdown': pp.max_drawdown(portfolio_value),
-            'Volatility': pp.portfolio_volatility(daily_returns),
-            'Portfolio Values': portfolio_value,
-            'Daily Returns': daily_returns.tolist()
+        return {
+            'Final Portfolio Value': portfolio_value,
+            'Trades Executed': self.trade_history
         }
-        log.info('Portfolio performance metrics calculated correctly.')
-        return performance_metrics
-    except Exception as e:
-        print(f'Failed to simulate trading strategy: {str(e)}')
-        log.error(f'Failed to simulate trading strategy: {str(e)}')
-        return {}

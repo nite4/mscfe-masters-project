@@ -27,7 +27,8 @@ def get_memory_usage():
     return process.memory_info().rss / 1024**2
 
 
-def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0, s:float=2.0, solver:str='auto'):
+def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
+                     s:float=2.0, solver:str='auto'):
     '''
     Runs a Ridge Regression model on the input data.
 
@@ -133,7 +134,7 @@ def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
         Maximum depth of a tree
     s (float, default=2.0):
         Threshold for trading signal generation
-    
+
     Returns:
     ________
     xgb_model (XGBRegressor):
@@ -147,10 +148,10 @@ def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
     try:
         if (learning_rate <= 0) or (n_estimators <= 0) or (max_depth <= 0):
             raise ValueError('Learning rate, n_estimators, and max_depth must be greater than 0.')
-        
+
         # Create a copy of the dataframe to avoid SettingWithCopyWarning
         df = df.copy()
-        
+
         X = df.drop(['NormalizedSpread'], axis=1)
         y = df['NormalizedSpread']
 
@@ -190,14 +191,14 @@ def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
         signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
                           np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
                                   'No action'))
-        
+
         df_test = X_test.copy()
         df_test['NormalizedSpread'] = y_test
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
         df_test['Pair'] = p
         df_test['Model'] = 'XGBoost'
-        
+
         return xgb_model, mse, df_test, time_usage, memory_usage
     except Exception as e:
         print(f'Failed to run XGBoost (learning_rate={learning_rate}, n_estimators={n_estimators}, max_depth={max_depth}, s={s}): {str(e)}')
@@ -250,20 +251,20 @@ def lstm_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
         y = df['NormalizedSpread'].values
 
         tickerX, tickerY = p.split(' ')
-        
+
         # Convert data to sequences
         X_seq, y_seq = [], []
         for i in range(lookback, len(X)):
             X_seq.append(X[i - lookback:i])
             y_seq.append(y[i])
-        
+
         X_seq, y_seq = np.array(X_seq), np.array(y_seq)
-        
+
         # Train-Test split
         test_size = int(0.2 * len(X_seq))
         X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
         y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
-        
+
         # Build LSTM model
         model = Sequential()
         model.add(Input(shape=(lookback, X.shape[1])))  # Use Input(shape) for the first layer
@@ -284,22 +285,22 @@ def lstm_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
 
         time_usage = end_time - start_time
         memory_usage = end_memory - start_memory
-        
+
         mse = mean_squared_error(y_test, y_pred)
         print(f'LSTM MSE: {mse}')
         log.info(f'LSTM MSE: {mse}')
-        
+
         # Generate trading signals
         signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
                           np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
                                   'No action'))
-        
+
         df_test = df.iloc[-test_size:].copy()
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
         df_test['Pair'] = p
         df_test['Model'] = 'LSTM'
-        
+
         return model, mse, df_test, time_usage, memory_usage
     except Exception as e:
         print(f'Failed to run LSTM model: {str(e)}')
@@ -352,27 +353,27 @@ def rnn_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
         y = df['NormalizedSpread'].values
 
         tickerX, tickerY = p.split(' ')
-        
+
         # Convert data to sequences
         X_seq, y_seq = [], []
         for i in range(lookback, len(X)):
             X_seq.append(X[i - lookback:i])
             y_seq.append(y[i])
-        
+
         X_seq, y_seq = np.array(X_seq), np.array(y_seq)
-        
+
         # Train-Test split
         test_size = int(0.2 * len(X_seq))
         X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
         y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
-        
+
         # Build RNN model
         model = Sequential()
         model.add(Input(shape=(lookback, X.shape[1])))  # Use Input(shape) for the first layer
         model.add(SimpleRNN(units, return_sequences=False))
         model.add(Dropout(dropout_rate))
         model.add(Dense(1))
-        
+
         # Measure time and memory usage
         start_time = time.time()
         start_memory = get_memory_usage()
@@ -386,22 +387,24 @@ def rnn_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
 
         time_usage = end_time - start_time
         memory_usage = end_memory - start_memory
-                
+
         mse = mean_squared_error(y_test, y_pred)
         print(f'RNN MSE: {mse}')
         log.info(f'RNN MSE: {mse}')
-        
+
         # Generate trading signals
-        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
-                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
-                                  'No action'))
-        
+        signals = np.where(y_pred>s,
+                           f'Sell {tickerX}, buy {tickerY}',
+                           np.where(y_pred<-1*s,
+                                    f'Buy {tickerX}, sell {tickerY}',
+                                    'No action'))
+
         df_test = df.iloc[-test_size:].copy()
         df_test['PredictedSpread'] = y_pred
         df_test['PredictedSignal'] = signals
         df_test['Pair'] = p
         df_test['Model'] = 'RNN'
-        
+
         return model, mse, df_test, time_usage, memory_usage
     except Exception as e:
         print(f'Failed to run RNN model: {str(e)}')
@@ -410,9 +413,10 @@ def rnn_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
 
 
 # @tf.function(reduce_retracing=True)
-def transformer_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
-                           num_heads:int=2, ff_dim:int=64, dropout_rate:float=0.1,
-                           learning_rate:float=0.001, epochs:int=50, batch_size:int=32):
+def transformer_regression(df: pd.DataFrame, p:str, lookback:int=10,
+                           s:float=2.0, num_heads:int=2, ff_dim:int=64,
+                           dropout_rate:float=0.1, learning_rate:float=0.001,
+                           epochs:int=50, batch_size:int=32):
     '''
     Runs a Transformer model on the input data.
 
@@ -509,9 +513,11 @@ def transformer_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0
         log.info(f'Transformer MSE: {mse}')
 
         # Generate trading signals
-        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
-                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
-                                  'No action'))
+        signals = np.where(y_pred>s,
+                           f'Sell {tickerX}, buy {tickerY}',
+                           np.where(y_pred<-1*s,
+                                    f'Buy {tickerX}, sell {tickerY}',
+                                    'No action'))
 
         df_test = df.iloc[-test_size:].copy()
         df_test['PredictedSpread'] = y_pred
@@ -526,10 +532,13 @@ def transformer_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0
         return None, np.inf, pd.DataFrame(), 0, 0
 
 
-def plot_model_forecasts(ridge_test_df:pd.DataFrame=None, xgb_test_df:pd.DataFrame=None,
-                         lstm_test_df:pd.DataFrame=None, transformer_test_df:pd.DataFrame=None,
+def plot_model_forecasts(ridge_test_df:pd.DataFrame=None,
+                         xgb_test_df:pd.DataFrame=None,
+                         lstm_test_df:pd.DataFrame=None,
+                         transformer_test_df:pd.DataFrame=None,
                          rnn_test_df:pd.DataFrame=None,
-                         tickerX:str=None, tickerY:str=None, s:float=2.0, ax:matplotlib.axes=None):
+                         tickerX:str=None, tickerY:str=None,
+                         s:float=2.0, ax:matplotlib.axes=None):
     '''
     Plots actual vs predicted spread values for both Ridge and XGBoost models.
 
@@ -553,12 +562,12 @@ def plot_model_forecasts(ridge_test_df:pd.DataFrame=None, xgb_test_df:pd.DataFra
         ax.axhline(y=s, color='orange', linestyle='--', alpha=0.5)
         ax.axhline(y=-1*s, color='orange', linestyle='--', alpha=0.5)
         # Plot actual values
-        ax.plot(ridge_test_df['NormalizedSpread'], 
+        ax.plot(ridge_test_df['NormalizedSpread'],
                 label='Actual Spread',
                 color='black',
                 linewidth=0.75,
                 )
-        
+
         # Plot Ridge predictions if available
         if ridge_test_df is not None and not ridge_test_df.empty:
             ax.plot(ridge_test_df['PredictedSpread'],
@@ -567,7 +576,7 @@ def plot_model_forecasts(ridge_test_df:pd.DataFrame=None, xgb_test_df:pd.DataFra
                     linewidth=0.75,
                     linestyle='--',
                     )
-            
+
         # Plot XGBoost predictions if available
         if xgb_test_df is not None and not xgb_test_df.empty:
             ax.plot(xgb_test_df['PredictedSpread'],
@@ -576,7 +585,7 @@ def plot_model_forecasts(ridge_test_df:pd.DataFrame=None, xgb_test_df:pd.DataFra
                     linewidth=0.75,
                     linestyle=':',
                     )
-            
+
         # Plot LSTM predictions if available
         if lstm_test_df is not None and not lstm_test_df.empty:
             ax.plot(lstm_test_df['PredictedSpread'],
@@ -585,7 +594,7 @@ def plot_model_forecasts(ridge_test_df:pd.DataFrame=None, xgb_test_df:pd.DataFra
                     linewidth=0.75,
                     linestyle='-.',
                     )
-            
+
         # Plot Transformer predictions if available 
         if transformer_test_df is not None and not transformer_test_df.empty:
             ax.plot(transformer_test_df['PredictedSpread'],
@@ -594,7 +603,7 @@ def plot_model_forecasts(ridge_test_df:pd.DataFrame=None, xgb_test_df:pd.DataFra
                     linewidth=0.75,
                     linestyle='-',
                     )
-        
+
         # Plot RNN predictions if available 
         if rnn_test_df is not None and not rnn_test_df.empty:
             ax.plot(rnn_test_df['PredictedSpread'],
