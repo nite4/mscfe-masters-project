@@ -1,8 +1,10 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import pandas as pd
 import psutil
+import pypickle
 import tensorflow as tf
 import time
 
@@ -28,7 +30,8 @@ def get_memory_usage():
 
 
 def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
-                     s:float=2.0, solver:str='auto'):
+                     s:float=2.0, solver:str='auto',
+                     pickle_file:str=None):
     '''
     Runs a Ridge Regression model on the input data.
 
@@ -45,6 +48,8 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
     solver (str, default='auto'):
         Ridge Regression solver; available options as in
         scikit-learn Ridge (https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html)
+    pickle_file (str, default=None):
+        string with path to the pickle file if no need to train the model from scratch.
 
     Returns:
     ________
@@ -78,19 +83,27 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        # Measure time and memory usage
-        start_time = time.time()
-        start_memory = get_memory_usage()
+        if (pickle_file is not None) & (os.path.exists(pickle_file)):
+            # Load the model instance using pypickle
+            ridge = pypickle.load(pickle_file)
+            print(f'Loaded Ridge Regression model from {pickle_file}.')
+            log.info(f'Loaded Ridge Regression model from {pickle_file}.')
+            time_usage = 0
+            memory_usage = 0
+        else:
+            # Measure time and memory usage during training
+            start_time = time.time()
+            start_memory = get_memory_usage()
 
-        ridge = Ridge(alpha=alpha, solver=solver)
-        ridge.fit(X_train_scaled, y_train)
+            ridge = Ridge(alpha=alpha, solver=solver)
+            ridge.fit(X_train_scaled, y_train)
+
+            end_time = time.time()
+            end_memory = get_memory_usage()
+            time_usage = end_time - start_time
+            memory_usage = end_memory - start_memory
+
         y_pred = ridge.predict(X_test_scaled)
-
-        end_memory = get_memory_usage()
-        end_time = time.time()
-
-        time_usage = end_time - start_time
-        memory_usage = end_memory - start_memory
 
         mse = mean_squared_error(y_test, y_pred)
         print(f'Ridge Regression MSE: {mse}')
@@ -116,7 +129,8 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
 
 
 def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
-                       n_estimators:int=100, max_depth:int=3, s:float=2.0):
+                       n_estimators:int=100, max_depth:int=3, s:float=2.0,
+                       pickle_file:str=None):
     '''
     Runs an XGBoost model on the input data.
 
@@ -134,6 +148,8 @@ def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
         Maximum depth of a tree
     s (float, default=2.0):
         Threshold for trading signal generation
+    pickle_file (str, default=None):
+        string with path to the pickle file if no need to train the model from scratch.
 
     Returns:
     ________
@@ -167,21 +183,27 @@ def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        # Measure time and memory usage
-        start_time = time.time()
-        start_memory = get_memory_usage()
+        if (pickle_file is not None) and (os.path.exists(pickle_file)):
+            xgb_model = pypickle.load(pickle_file)
+            print(f'Loaded XGBoost model from {pickle_file}.')
+            log.info(f'Loaded XGBoost model from {pickle_file}.')
+            time_usage = 0
+            memory_usage = 0
+        else:
+            start_time = time.time()
+            start_memory = get_memory_usage()
 
-        xgb_model = XGBRegressor(learning_rate=learning_rate,
-                                 n_estimators=n_estimators,
-                                 max_depth=max_depth)
-        xgb_model.fit(X_train_scaled, y_train)
+            xgb_model = XGBRegressor(learning_rate=learning_rate,
+                                     n_estimators=n_estimators,
+                                     max_depth=max_depth)
+            xgb_model.fit(X_train_scaled, y_train)
+
+            end_time = time.time()
+            end_memory = get_memory_usage()
+            time_usage = end_time - start_time
+            memory_usage = end_memory - start_memory
+        
         y_pred = xgb_model.predict(X_test_scaled)
-
-        end_memory = get_memory_usage()
-        end_time = time.time()
-
-        time_usage = end_time - start_time
-        memory_usage = end_memory - start_memory
 
         mse = mean_squared_error(y_test, y_pred)
         print(f'XGBoost MSE: {mse}')
@@ -210,7 +232,7 @@ def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
 def lstm_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
                      units:int=50, dropout_rate:float=0.2,
                      learning_rate:float=0.001, epochs:int=50,
-                     batch_size:int=32):
+                     batch_size:int=32, pickle_file:str=None):
     '''
     Runs an LSTM model on the input data.
 
@@ -233,7 +255,9 @@ def lstm_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
     epochs (int, default=50):
         number of training epochs
     batch_size (int, default=32):
-        batch size for training.
+        batch size for training
+    pickle_file (str, default=None):
+        string with path to the pickle file if no need to train the model from scratch.
     
     Returns:
     ________
@@ -265,26 +289,30 @@ def lstm_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
         X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
         y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
 
-        # Build LSTM model
-        model = Sequential()
-        model.add(Input(shape=(lookback, X.shape[1])))  # Use Input(shape) for the first layer
-        model.add(LSTM(units, return_sequences=False))
-        model.add(Dropout(dropout_rate))
-        model.add(Dense(1))
+        if (pickle_file is not None) and (os.path.exists(pickle_file)):
+            model = pypickle.load(pickle_file)
+            print(f'Loaded LSTM model from {pickle_file}.')
+            log.info(f'Loaded LSTM model from {pickle_file}.')
+            time_usage = 0
+            memory_usage = 0
+        else:
+            start_time = time.time()
+            start_memory = get_memory_usage()
 
-        # Measure time and memory usage
-        start_time = time.time()
-        start_memory = get_memory_usage()
+            model = Sequential()
+            model.add(Input(shape=(lookback, X.shape[1])))
+            model.add(LSTM(units, return_sequences=False))
+            model.add(Dropout(dropout_rate))
+            model.add(Dense(1))
+            model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
+            model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
 
-        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
-        model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
+            end_time = time.time()
+            end_memory = get_memory_usage()
+            time_usage = end_time - start_time
+            memory_usage = end_memory - start_memory
+        
         y_pred = model.predict(X_test).flatten()
-
-        end_memory = get_memory_usage()
-        end_time = time.time()
-
-        time_usage = end_time - start_time
-        memory_usage = end_memory - start_memory
 
         mse = mean_squared_error(y_test, y_pred)
         print(f'LSTM MSE: {mse}')
@@ -312,7 +340,7 @@ def lstm_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
 def rnn_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
                     units:int=50, dropout_rate:float=0.2,
                     learning_rate:float=0.001, epochs:int=50,
-                    batch_size:int=32):
+                    batch_size:int=32, pickle_file:str=None):
     '''
     Runs an RNN model on the input data.
 
@@ -335,7 +363,9 @@ def rnn_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
     epochs (int, default=50):
         number of training epochs
     batch_size (int, default=32):
-        batch size for training.
+        batch size for training
+    pickle_file (str, default=None):
+        string with path to the pickle file if no need to train the model from scratch.
     
     Returns:
     ________
@@ -367,26 +397,30 @@ def rnn_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
         X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
         y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
 
-        # Build RNN model
-        model = Sequential()
-        model.add(Input(shape=(lookback, X.shape[1])))  # Use Input(shape) for the first layer
-        model.add(SimpleRNN(units, return_sequences=False))
-        model.add(Dropout(dropout_rate))
-        model.add(Dense(1))
+        if (pickle_file is not None) and (os.path.exists(pickle_file)):
+            model = pypickle.load(pickle_file)
+            print(f'Loaded RNN model from {pickle_file}.')
+            log.info(f'Loaded RNN model from {pickle_file}.')
+            time_usage = 0
+            memory_usage = 0
+        else:
+            start_time = time.time()
+            start_memory = get_memory_usage()
 
-        # Measure time and memory usage
-        start_time = time.time()
-        start_memory = get_memory_usage()
+            model = Sequential()
+            model.add(Input(shape=(lookback, X.shape[1])))
+            model.add(SimpleRNN(units, return_sequences=False))
+            model.add(Dropout(dropout_rate))
+            model.add(Dense(1))
+            model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
+            model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
 
-        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
-        model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
+            end_time = time.time()
+            end_memory = get_memory_usage()
+            time_usage = end_time - start_time
+            memory_usage = end_memory - start_memory
+        
         y_pred = model.predict(X_test).flatten()
-
-        end_memory = get_memory_usage()
-        end_time = time.time()
-
-        time_usage = end_time - start_time
-        memory_usage = end_memory - start_memory
 
         mse = mean_squared_error(y_test, y_pred)
         print(f'RNN MSE: {mse}')
@@ -416,7 +450,7 @@ def rnn_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
 def transformer_regression(df: pd.DataFrame, p:str, lookback:int=10,
                            s:float=2.0, num_heads:int=2, ff_dim:int=64,
                            dropout_rate:float=0.1, learning_rate:float=0.001,
-                           epochs:int=50, batch_size:int=32):
+                           epochs:int=50, batch_size:int=32, pickle_file:str=None):
     '''
     Runs a Transformer model on the input data.
 
@@ -442,6 +476,8 @@ def transformer_regression(df: pd.DataFrame, p:str, lookback:int=10,
         Number of training epochs
     batch_size (int, default=32):
         Batch size for training
+    pickle_file (str, default=None):
+        string with path to the pickle file if no need to train the model from scratch.
 
     Returns:
     ________
@@ -473,40 +509,42 @@ def transformer_regression(df: pd.DataFrame, p:str, lookback:int=10,
         X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
         y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
 
-        # Transformer Encoder Block
-        def transformer_encoder(inputs, num_heads, ff_dim, dropout_rate):
-            attention = MultiHeadAttention(num_heads=num_heads, key_dim=ff_dim)(inputs, inputs)
-            attention = Dropout(dropout_rate)(attention)
-            attention = LayerNormalization(epsilon=1e-6)(inputs + attention)
+        if (pickle_file is not None) and (os.path.exists(pickle_file)):
+            model = pypickle.load(pickle_file)
+            print(f'Loaded Transformer model from {pickle_file}')
+            log.info(f'Loaded Transformer model from {pickle_file}')
+            time_usage = 0
+            memory_usage = 0
+        else:
+            start_time = time.time()
+            start_memory = get_memory_usage()
 
-            ff_output = Dense(ff_dim, activation='relu')(attention)
-            ff_output = Dense(inputs.shape[-1])(ff_output)
-            ff_output = Dropout(dropout_rate)(ff_output)
-            return LayerNormalization(epsilon=1e-6)(attention + ff_output)
+            # Define the Transformer encoder block
+            def transformer_encoder(inputs, num_heads, ff_dim, dropout_rate):
+                attention = MultiHeadAttention(num_heads=num_heads, key_dim=ff_dim)(inputs, inputs)
+                attention = Dropout(dropout_rate)(attention)
+                attention = LayerNormalization(epsilon=1e-6)(inputs + attention)
+                ff_output = Dense(ff_dim, activation='relu')(attention)
+                ff_output = Dense(inputs.shape[-1])(ff_output)
+                ff_output = Dropout(dropout_rate)(ff_output)
+                return LayerNormalization(epsilon=1e-6)(attention + ff_output)
 
-        # Define model input
-        inputs = Input(shape=(lookback, X.shape[1]))
-        x = transformer_encoder(inputs, num_heads, ff_dim, dropout_rate)
-        x = Flatten()(x)
-        x = Dense(32, activation='relu')(x)
-        x = Dropout(dropout_rate)(x)
-        outputs = Dense(1)(x)
+            inputs = Input(shape=(lookback, X.shape[1]))
+            x = transformer_encoder(inputs, num_heads, ff_dim, dropout_rate)
+            x = Flatten()(x)
+            x = Dense(32, activation='relu')(x)
+            x = Dropout(dropout_rate)(x)
+            outputs = Dense(1)(x)
+            model = Model(inputs, outputs)
+            model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
+            model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
 
-        model = Model(inputs, outputs)
-
-        # Measure time and memory usage
-        start_time = time.time()
-        start_memory = get_memory_usage()
-
-        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
-        model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False)
+            end_time = time.time()
+            end_memory = get_memory_usage()
+            time_usage = end_time - start_time
+            memory_usage = end_memory - start_memory
+        
         y_pred = model.predict(X_test).flatten()
-
-        end_memory = get_memory_usage()
-        end_time = time.time()
-
-        time_usage = end_time - start_time
-        memory_usage = end_memory - start_memory
 
         mse = mean_squared_error(y_test, y_pred)
         print(f'Transformer MSE: {mse}')
