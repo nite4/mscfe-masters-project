@@ -45,7 +45,7 @@ def hit_ratio(returns):
         print(f'Failed to calculate Hit Ratio: {str(e)}')
         log.error(f'Failed to calculate Hit Ratio: {str(e)}')
         return None
-    
+
 
 def max_drawdown(values):
     '''Calculates Maximum Drawdown of the portfolio.'''
@@ -56,7 +56,7 @@ def max_drawdown(values):
         print(f'Failed to calculate Maximum Drawdown: {str(e)}')
         log.error(f'Failed to calculate Maximum Drawdown: {str(e)}')
         return None
-    
+
 
 def portfolio_volatility(returns):
     '''Calculates portfolio volatility given as standard deviation of returns.'''

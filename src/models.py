@@ -110,8 +110,8 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
         log.info(f'Ridge Regression with alpha={alpha} MSE: {mse}')
 
         # Interpret forecast as trading signals
-        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
-                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
+        signals = np.where(y_pred>s, f'Short {tickerX} / Long {tickerY}',
+                          np.where(y_pred<-1*s, f'Long {tickerX} / Short {tickerY}',
                                   'No action'))
 
         df_test = X_test.copy()
@@ -210,8 +210,8 @@ def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
         log.info(f'XGBoost with learning_rate={learning_rate}, n_estimators={n_estimators}, max_depth={max_depth} MSE: {mse}')
 
         # Interpret forecast as trading signals
-        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
-                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
+        signals = np.where(y_pred>s, f'Short {tickerX} / Long {tickerY}',
+                          np.where(y_pred<-1*s, f'Long {tickerX} / Short {tickerY}',
                                   'No action'))
 
         df_test = X_test.copy()
@@ -319,8 +319,8 @@ def lstm_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
         log.info(f'LSTM MSE: {mse}')
 
         # Generate trading signals
-        signals = np.where(y_pred>s, f'Sell {tickerX}, buy {tickerY}',
-                          np.where(y_pred<-1*s, f'Buy {tickerX}, sell {tickerY}',
+        signals = np.where(y_pred>s, f'Short {tickerX} / Long {tickerY}',
+                          np.where(y_pred<-1*s, f'Long {tickerX} / Short {tickerY}',
                                   'No action'))
 
         df_test = df.iloc[-test_size:].copy()
@@ -428,9 +428,9 @@ def rnn_regression(df: pd.DataFrame, p:str, lookback:int=10, s:float=2.0,
 
         # Generate trading signals
         signals = np.where(y_pred>s,
-                           f'Sell {tickerX}, buy {tickerY}',
+                           f'Short {tickerX} / Long {tickerY}',
                            np.where(y_pred<-1*s,
-                                    f'Buy {tickerX}, sell {tickerY}',
+                                    f'Long {tickerX} / Short {tickerY}',
                                     'No action'))
 
         df_test = df.iloc[-test_size:].copy()
@@ -552,9 +552,9 @@ def transformer_regression(df: pd.DataFrame, p:str, lookback:int=10,
 
         # Generate trading signals
         signals = np.where(y_pred>s,
-                           f'Sell {tickerX}, buy {tickerY}',
+                           f'Short {tickerX} / Long {tickerY}',
                            np.where(y_pred<-1*s,
-                                    f'Buy {tickerX}, sell {tickerY}',
+                                    f'Long {tickerX} / Short {tickerY}',
                                     'No action'))
 
         df_test = df.iloc[-test_size:].copy()
