@@ -83,14 +83,7 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        if (pickle_file is not None) & (os.path.exists(pickle_file)):
-            # Load the model instance using pypickle
-            ridge = pypickle.load(pickle_file)
-            print(f'Loaded Ridge Regression model from {pickle_file}.')
-            log.info(f'Loaded Ridge Regression model from {pickle_file}.')
-            time_usage = 0
-            memory_usage = 0
-        else:
+        if pickle_file is None or not os.path.exists(pickle_file):
             # Measure time and memory usage during training
             start_time = time.time()
             start_memory = get_memory_usage()
@@ -102,6 +95,14 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
             end_memory = get_memory_usage()
             time_usage = end_time - start_time
             memory_usage = end_memory - start_memory
+        
+        else:
+            # Load the model instance using pypickle
+            ridge = pypickle.load(pickle_file)
+            print(f'Loaded Ridge Regression model from {pickle_file}.')
+            log.info(f'Loaded Ridge Regression model from {pickle_file}.')
+            time_usage = 0
+            memory_usage = 0
 
         y_pred = ridge.predict(X_test_scaled)
 
