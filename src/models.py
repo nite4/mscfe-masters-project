@@ -161,7 +161,7 @@ class Models:
         max_depth: int = 3,
         s: float = 2.0,
         pickle_file: str = None,
-        verbose=True,
+        verbose: bool = True,
     ):
         """
         Runs an XGBoost model on the input data.
@@ -295,6 +295,7 @@ class Models:
         epochs: int = 50,
         batch_size: int = 32,
         pickle_file: str = None,
+        verbose: bool = True,
     ):
         """
         Runs an LSTM model on the input data.
@@ -351,14 +352,9 @@ class Models:
             test_size = int(0.2 * len(X_seq))
             X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
             y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
-    
-            if (pickle_file is not None) and (os.path.exists(pickle_file)):
-                model = pypickle.load(pickle_file)
-                print(f"Loaded LSTM model from {pickle_file}.")
-                log.info(f"Loaded LSTM model from {pickle_file}.")
-                time_usage = 0
-                memory_usage = 0
-            else:
+
+            if pickle_file is None or not os.path.exists(pickle_file):
+                
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
     
@@ -371,16 +367,22 @@ class Models:
                 model.fit(
                     X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False
                 )
+                
+                start_time = time.time()
+                start_memory = self.get_memory_usage()
     
-                end_time = time.time()
-                end_memory = self.get_memory_usage()
-                time_usage = end_time - start_time
-                memory_usage = end_memory - start_memory
-    
+            else:
+                model = pypickle.load(pickle_file)
+                print(f"Loaded LSTM model from {pickle_file}.")
+                log.info(f"Loaded LSTM model from {pickle_file}.")
+                time_usage = 0
+                memory_usage = 0
+                    
             y_pred = model.predict(X_test).flatten()
     
             mse = mean_squared_error(y_test, y_pred)
-            print(f"LSTM MSE: {mse}")
+            if verbose:
+                print(f"LSTM MSE: {mse}")
             log.info(f"LSTM MSE: {mse}")
     
             # Generate trading signals
@@ -416,6 +418,7 @@ class Models:
         epochs: int = 50,
         batch_size: int = 32,
         pickle_file: str = None,
+        verbose=True,
     ):
         """
         Runs an RNN model on the input data.
@@ -472,14 +475,8 @@ class Models:
             test_size = int(0.2 * len(X_seq))
             X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
             y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
-    
-            if (pickle_file is not None) and (os.path.exists(pickle_file)):
-                model = pypickle.load(pickle_file)
-                print(f"Loaded RNN model from {pickle_file}.")
-                log.info(f"Loaded RNN model from {pickle_file}.")
-                time_usage = 0
-                memory_usage = 0
-            else:
+
+            if pickle_file is None or not os.path.exists(pickle_file):
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
     
@@ -497,11 +494,19 @@ class Models:
                 end_memory = self.get_memory_usage()
                 time_usage = end_time - start_time
                 memory_usage = end_memory - start_memory
-    
+
+            else:
+                model = pypickle.load(pickle_file)
+                print(f"Loaded RNN model from {pickle_file}.")
+                log.info(f"Loaded RNN model from {pickle_file}.")
+                time_usage = 0
+                memory_usage = 0
+           
             y_pred = model.predict(X_test).flatten()
     
             mse = mean_squared_error(y_test, y_pred)
-            print(f"RNN MSE: {mse}")
+            if verbose:
+                print(f"RNN MSE: {mse}")
             log.info(f"RNN MSE: {mse}")
     
             # Generate trading signals
@@ -597,13 +602,7 @@ class Models:
             X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
             y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
     
-            if (pickle_file is not None) and (os.path.exists(pickle_file)):
-                model = pypickle.load(pickle_file)
-                print(f"Loaded Transformer model from {pickle_file}")
-                log.info(f"Loaded Transformer model from {pickle_file}")
-                time_usage = 0
-                memory_usage = 0
-            else:
+            if pickle_file is None or not os.path.exists(pickle_file):
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
     
@@ -635,6 +634,12 @@ class Models:
                 end_memory = self.get_memory_usage()
                 time_usage = end_time - start_time
                 memory_usage = end_memory - start_memory
+            else:
+                model = pypickle.load(pickle_file)
+                print(f"Loaded Transformer model from {pickle_file}")
+                log.info(f"Loaded Transformer model from {pickle_file}")
+                time_usage = 0
+                memory_usage = 0
     
             y_pred = model.predict(X_test).flatten()
     
