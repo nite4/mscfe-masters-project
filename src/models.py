@@ -19,7 +19,9 @@ from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.optimizers import Adam
 from utils import log
 from xgboost import XGBRegressor
+from itertools import product
 
+use_xgboost_gpu = True
 
 def get_memory_usage():
     '''
@@ -31,7 +33,7 @@ def get_memory_usage():
 
 def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
                      s:float=2.0, solver:str='auto',
-                     pickle_file:str=None):
+                     pickle_file:str=None, verbose=True):
     '''
     Runs a Ridge Regression model on the input data.
 
@@ -79,9 +81,9 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
                                                             test_size=test_size,
                                                             shuffle=False)
         # Scale data
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
+        # scaler = StandardScaler()
+        # X_train_scaled = scaler.fit_transform(X_train)
+        # X_test_scaled = scaler.transform(X_test)
 
         if pickle_file is None or not os.path.exists(pickle_file):
             # Measure time and memory usage during training
@@ -89,7 +91,7 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
             start_memory = get_memory_usage()
 
             ridge = Ridge(alpha=alpha, solver=solver)
-            ridge.fit(X_train_scaled, y_train)
+            ridge.fit(X_train, y_train)
 
             end_time = time.time()
             end_memory = get_memory_usage()
@@ -104,10 +106,11 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
             time_usage = 0
             memory_usage = 0
 
-        y_pred = ridge.predict(X_test_scaled)
+        y_pred = ridge.predict(X_test)
 
         mse = mean_squared_error(y_test, y_pred)
-        print(f'Ridge Regression MSE: {mse}')
+        if verbose:
+            print(f'Ridge Regression MSE: {mse:.6f}')
         log.info(f'Ridge Regression with alpha={alpha} MSE: {mse}')
 
         # Interpret forecast as trading signals
@@ -131,7 +134,7 @@ def ridge_regression(df:pd.DataFrame, p:str, alpha:float=1.0,
 
 def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
                        n_estimators:int=100, max_depth:int=3, s:float=2.0,
-                       pickle_file:str=None):
+                       pickle_file:str=None, use_gpu=use_xgboost_gpu, verbose=True):
     '''
     Runs an XGBoost model on the input data.
 
@@ -180,34 +183,42 @@ def xgboost_regression(df:pd.DataFrame, p:str, learning_rate:float=0.1,
                                                             test_size=test_size,
                                                             shuffle=False)
         # Scale data
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
+        # scaler = StandardScaler()
+        # X_train_scaled = scaler.fit_transform(X_train)
+        # X_test_scaled = scaler.transform(X_test)
 
-        if (pickle_file is not None) and (os.path.exists(pickle_file)):
-            xgb_model = pypickle.load(pickle_file)
-            print(f'Loaded XGBoost model from {pickle_file}.')
-            log.info(f'Loaded XGBoost model from {pickle_file}.')
-            time_usage = 0
-            memory_usage = 0
-        else:
+        if pickle_file is None or not os.path.exists(pickle_file):
             start_time = time.time()
             start_memory = get_memory_usage()
 
-            xgb_model = XGBRegressor(learning_rate=learning_rate,
-                                     n_estimators=n_estimators,
-                                     max_depth=max_depth)
-            xgb_model.fit(X_train_scaled, y_train)
+            if use_gpu:
+                xgb_model = XGBRegressor(device = "cuda",
+                                         learning_rate=learning_rate,
+                                         n_estimators=n_estimators,
+                                         max_depth=max_depth)
+            else:
+                xgb_model = XGBRegressor(learning_rate=learning_rate,
+                                         n_estimators=n_estimators,
+                                         max_depth=max_depth)
+            xgb_model.fit(X_train, y_train)
 
             end_time = time.time()
             end_memory = get_memory_usage()
             time_usage = end_time - start_time
             memory_usage = end_memory - start_memory
         
-        y_pred = xgb_model.predict(X_test_scaled)
+        else:
+            xgb_model = pypickle.load(pickle_file)
+            print(f'Loaded XGBoost model from {pickle_file}.')
+            log.info(f'Loaded XGBoost model from {pickle_file}.')
+            time_usage = 0
+            memory_usage = 0
+
+        y_pred = xgb_model.predict(X_test)
 
         mse = mean_squared_error(y_test, y_pred)
-        print(f'XGBoost MSE: {mse}')
+        if verbose:
+            print(f'XGBoost MSE: {mse}')
         log.info(f'XGBoost with learning_rate={learning_rate}, n_estimators={n_estimators}, max_depth={max_depth} MSE: {mse}')
 
         # Interpret forecast as trading signals
@@ -673,3 +684,59 @@ def plot_model_forecasts(ridge_test_df:pd.DataFrame=None,
         print(f'Failed to plot model forecasts: {str(e)}')
         log.error(f'Failed to plot model forecasts: {str(e)}')
         return None
+
+
+def hyperparameter_tuning(df, p, model_func, param_grid, verbose, use_gpu=False):
+    """
+    Runs hyperparameter tuning for a given model function.
+
+    Parameters:
+    ___________
+    df (pd.DataFrame): 
+        Input dataset with features and target variable.
+    p (str): 
+        Trading pair (e.g., 'EUR/USD').
+    model_func (function): 
+        Model function to call (e.g., ridge_regression).
+    param_grid (dict): 
+        Dictionary of hyperparameter values to test.
+
+    Returns:
+    ________
+    best_model (object): 
+        Best model instance (e.g., Ridge model).
+    best_params (dict): 
+        Best hyperparameters used.
+    best_mse (float): 
+        Lowest Mean Squared Error.
+    best_df_test (pd.DataFrame): 
+        Test set results of the best model.
+    verbose (bool):
+        If verbose==True, print model statements.
+    """
+
+    param_names = list(param_grid.keys())  # Extract param names
+    param_values = list(param_grid.values())  # Extract corresponding lists of values
+
+    best_mse = np.inf
+    best_model = None
+    best_params = None
+    best_df_test = None
+
+    for param_combination in product(*param_values):
+        params = dict(zip(param_names, param_combination))  # Convert tuple to dictionary
+
+        if verbose:
+            print(f"Testing params: {params}")  # Optional logging
+
+        model, mse, df_test, _, _ = model_func(df, p, **params, verbose=verbose)  # Run model function
+
+        if mse < best_mse:
+            best_mse = mse
+            best_model = model
+            best_params = params
+            best_df_test = df_test
+
+    if verbose:
+        print(f"Best parameters: {best_params}, Best MSE: {best_mse}")
+    return best_model, best_params, best_mse, best_df_test
