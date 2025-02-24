@@ -543,6 +543,7 @@ class Models:
         epochs: int = 50,
         batch_size: int = 32,
         pickle_file: str = None,
+        verbose: bool = True,
     ):
         """
         Runs a Transformer model on the input data.
@@ -644,7 +645,8 @@ class Models:
             y_pred = model.predict(X_test).flatten()
     
             mse = mean_squared_error(y_test, y_pred)
-            print(f"Transformer MSE: {mse}")
+            if verbose:
+                print(f"Transformer MSE: {mse}")
             log.info(f"Transformer MSE: {mse}")
     
             # Generate trading signals
