@@ -368,9 +368,10 @@ class Models:
                     X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False
                 )
                 
-                start_time = time.time()
-                start_memory = self.get_memory_usage()
-    
+                end_time = time.time()
+                end_memory = self.get_memory_usage()
+                time_usage = end_time - start_time
+                memory_usage = end_memory - start_memory
             else:
                 model = pypickle.load(pickle_file)
                 print(f"Loaded LSTM model from {pickle_file}.")
