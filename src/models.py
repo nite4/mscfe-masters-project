@@ -33,15 +33,13 @@ class Models:
     def __init__(self, use_xgboost_gpu):
         self.use_xgboost_gpu = use_xgboost_gpu
 
-
     def get_memory_usage(self):
         """
         Helper function measuring memory usage.
         """
         process = psutil.Process()
         return process.memory_info().rss / 1024**2
-    
-    
+
     def ridge_regression(
         self,
         df: pd.DataFrame,
@@ -54,7 +52,7 @@ class Models:
     ):
         """
         Runs a Ridge Regression model on the input data.
-    
+
         Parameters:
         ___________
         df (pd.DataFrame):
@@ -70,7 +68,7 @@ class Models:
             scikit-learn Ridge (https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html)
         pickle_file (str, default=None):
             string with path to the pickle file if no need to train the model from scratch.
-    
+
         Returns:
         ________
         ridge (sklearn.linear_model.Ridge):
@@ -84,15 +82,15 @@ class Models:
         try:
             if alpha < 0:
                 raise ValueError("Alpha must be greater than or equal to 0.")
-    
+
             # Create a copy of the dataframe to avoid SettingWithCopyWarning
             df = df.copy()
-    
+
             X = df.drop(["NormalizedSpread"], axis=1)
             y = df["NormalizedSpread"]
-    
+
             tickerX, tickerY = p.split(" ")
-    
+
             # Train-Validation split 80:20
             test_size = 0.2
             X_train, X_test, y_train, y_test = train_test_split(
@@ -102,20 +100,20 @@ class Models:
             # scaler = StandardScaler()
             # X_train_scaled = scaler.fit_transform(X_train)
             # X_test_scaled = scaler.transform(X_test)
-    
+
             if pickle_file is None or not os.path.exists(pickle_file):
                 # Measure time and memory usage during training
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
-    
+
                 ridge = Ridge(alpha=alpha, solver=solver)
                 ridge.fit(X_train, y_train)
-    
+
                 end_time = time.time()
                 end_memory = self.get_memory_usage()
                 time_usage = end_time - start_time
                 memory_usage = end_memory - start_memory
-    
+
             else:
                 # Load the model instance using pypickle
                 ridge = pypickle.load(pickle_file)
@@ -123,35 +121,38 @@ class Models:
                 log.info(f"Loaded Ridge Regression model from {pickle_file}.")
                 time_usage = 0
                 memory_usage = 0
-    
+
             y_pred = ridge.predict(X_test)
-    
+
             mse = mean_squared_error(y_test, y_pred)
             if verbose:
                 print(f"Ridge Regression MSE: {mse:.6f}")
             log.info(f"Ridge Regression with alpha={alpha} MSE: {mse}")
-    
+
             # Interpret forecast as trading signals
             signals = np.where(
                 y_pred > s,
                 f"Short {tickerX} / Long {tickerY}",
-                np.where(y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"),
+                np.where(
+                    y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"
+                ),
             )
-    
+
             df_test = X_test.copy()
             df_test["NormalizedSpread"] = y_test
             df_test["PredictedSpread"] = y_pred
             df_test["PredictedSignal"] = signals
             df_test["Pair"] = p
             df_test["Model"] = "Ridge Regression"
-    
+
             return ridge, mse, df_test, time_usage, memory_usage
         except Exception as e:
             print(f"Failed to run Ridge Regression (alpha={alpha}, s={s}): {str(e)}")
-            log.error(f"Failed to run Ridge Regression (alpha={alpha}, s={s}): {str(e)}")
+            log.error(
+                f"Failed to run Ridge Regression (alpha={alpha}, s={s}): {str(e)}"
+            )
             return None, np.inf, pd.DataFrame(), 0, 0
-    
-    
+
     def xgboost_regression(
         self,
         df: pd.DataFrame,
@@ -165,7 +166,7 @@ class Models:
     ):
         """
         Runs an XGBoost model on the input data.
-    
+
         Parameters:
         ___________
         df (pd.DataFrame):
@@ -182,7 +183,7 @@ class Models:
             Threshold for trading signal generation
         pickle_file (str, default=None):
             string with path to the pickle file if no need to train the model from scratch.
-    
+
         Returns:
         ________
         xgb_model (XGBRegressor):
@@ -198,15 +199,15 @@ class Models:
                 raise ValueError(
                     "Learning rate, n_estimators, and max_depth must be greater than 0."
                 )
-    
+
             # Create a copy of the dataframe to avoid SettingWithCopyWarning
             df = df.copy()
-    
+
             X = df.drop(["NormalizedSpread"], axis=1)
             y = df["NormalizedSpread"]
-    
+
             tickerX, tickerY = p.split(" ")
-    
+
             # Train-Validation split 80:20
             test_size = 0.2
             X_train, X_test, y_train, y_test = train_test_split(
@@ -216,11 +217,11 @@ class Models:
             # scaler = StandardScaler()
             # X_train_scaled = scaler.fit_transform(X_train)
             # X_test_scaled = scaler.transform(X_test)
-    
+
             if pickle_file is None or not os.path.exists(pickle_file):
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
-    
+
                 if self.use_xgboost_gpu:
                     xgb_model = XGBRegressor(
                         device="cuda",
@@ -235,42 +236,44 @@ class Models:
                         max_depth=max_depth,
                     )
                 xgb_model.fit(X_train, y_train)
-    
+
                 end_time = time.time()
                 end_memory = self.get_memory_usage()
                 time_usage = end_time - start_time
                 memory_usage = end_memory - start_memory
-    
+
             else:
                 xgb_model = pypickle.load(pickle_file)
                 print(f"Loaded XGBoost model from {pickle_file}.")
                 log.info(f"Loaded XGBoost model from {pickle_file}.")
                 time_usage = 0
                 memory_usage = 0
-    
+
             y_pred = xgb_model.predict(X_test)
-    
+
             mse = mean_squared_error(y_test, y_pred)
             if verbose:
                 print(f"XGBoost MSE: {mse}")
             log.info(
                 f"XGBoost with learning_rate={learning_rate}, n_estimators={n_estimators}, max_depth={max_depth} MSE: {mse}"
             )
-    
+
             # Interpret forecast as trading signals
             signals = np.where(
                 y_pred > s,
                 f"Short {tickerX} / Long {tickerY}",
-                np.where(y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"),
+                np.where(
+                    y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"
+                ),
             )
-    
+
             df_test = X_test.copy()
             df_test["NormalizedSpread"] = y_test
             df_test["PredictedSpread"] = y_pred
             df_test["PredictedSignal"] = signals
             df_test["Pair"] = p
             df_test["Model"] = "XGBoost"
-    
+
             return xgb_model, mse, df_test, time_usage, memory_usage
         except Exception as e:
             print(
@@ -280,8 +283,7 @@ class Models:
                 f"Failed to run XGBoost (learning_rate={learning_rate}, n_estimators={n_estimators}, max_depth={max_depth}, s={s}): {str(e)}"
             )
             return None, np.inf, pd.DataFrame(), 0, 0
-    
-    
+
     # @tf.function(reduce_retracing=True)
     def lstm_regression(
         self,
@@ -299,7 +301,7 @@ class Models:
     ):
         """
         Runs an LSTM model on the input data.
-    
+
         Parameters:
         ___________
         df (pd.DataFrame):
@@ -322,7 +324,7 @@ class Models:
             batch size for training
         pickle_file (str, default=None):
             string with path to the pickle file if no need to train the model from scratch.
-    
+
         Returns:
         ________
         model (tf.keras.Model):
@@ -337,27 +339,27 @@ class Models:
             df = df.copy()
             X = df.drop(["NormalizedSpread"], axis=1).values
             y = df["NormalizedSpread"].values
-    
+
             tickerX, tickerY = p.split(" ")
-    
+
             # Convert data to sequences
             X_seq, y_seq = [], []
             for i in range(lookback, len(X)):
                 X_seq.append(X[i - lookback : i])
                 y_seq.append(y[i])
-    
+
             X_seq, y_seq = np.array(X_seq), np.array(y_seq)
-    
+
             # Train-Test split
             test_size = int(0.2 * len(X_seq))
             X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
             y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
 
             if pickle_file is None or not os.path.exists(pickle_file):
-                
+
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
-    
+
                 model = Sequential()
                 model.add(Input(shape=(lookback, X.shape[1])))
                 model.add(LSTM(units, return_sequences=False))
@@ -365,9 +367,13 @@ class Models:
                 model.add(Dense(1))
                 model.compile(optimizer=Adam(learning_rate=learning_rate), loss="mse")
                 model.fit(
-                    X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False
+                    X_train,
+                    y_train,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    verbose=False,
                 )
-                
+
                 end_time = time.time()
                 end_memory = self.get_memory_usage()
                 time_usage = end_time - start_time
@@ -378,34 +384,35 @@ class Models:
                 log.info(f"Loaded LSTM model from {pickle_file}.")
                 time_usage = 0
                 memory_usage = 0
-                    
+
             y_pred = model.predict(X_test).flatten()
-    
+
             mse = mean_squared_error(y_test, y_pred)
             if verbose:
                 print(f"LSTM MSE: {mse}")
             log.info(f"LSTM MSE: {mse}")
-    
+
             # Generate trading signals
             signals = np.where(
                 y_pred > s,
                 f"Short {tickerX} / Long {tickerY}",
-                np.where(y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"),
+                np.where(
+                    y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"
+                ),
             )
-    
+
             df_test = df.iloc[-test_size:].copy()
             df_test["PredictedSpread"] = y_pred
             df_test["PredictedSignal"] = signals
             df_test["Pair"] = p
             df_test["Model"] = "LSTM"
-    
+
             return model, mse, df_test, time_usage, memory_usage
         except Exception as e:
             print(f"Failed to run LSTM model: {str(e)}")
             log.error(f"Failed to run LSTM model: {str(e)}")
             return None, np.inf, pd.DataFrame(), 0, 0
-    
-    
+
     # @tf.function(reduce_retracing=True)
     def rnn_regression(
         self,
@@ -423,7 +430,7 @@ class Models:
     ):
         """
         Runs an RNN model on the input data.
-    
+
         Parameters:
         ___________
         df (pd.DataFrame):
@@ -446,7 +453,7 @@ class Models:
             batch size for training
         pickle_file (str, default=None):
             string with path to the pickle file if no need to train the model from scratch.
-    
+
         Returns:
         ________
         model (tf.keras.Model):
@@ -461,17 +468,17 @@ class Models:
             df = df.copy()
             X = df.drop(["NormalizedSpread"], axis=1).values
             y = df["NormalizedSpread"].values
-    
+
             tickerX, tickerY = p.split(" ")
-    
+
             # Convert data to sequences
             X_seq, y_seq = [], []
             for i in range(lookback, len(X)):
                 X_seq.append(X[i - lookback : i])
                 y_seq.append(y[i])
-    
+
             X_seq, y_seq = np.array(X_seq), np.array(y_seq)
-    
+
             # Train-Test split
             test_size = int(0.2 * len(X_seq))
             X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
@@ -480,7 +487,7 @@ class Models:
             if pickle_file is None or not os.path.exists(pickle_file):
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
-    
+
                 model = Sequential()
                 model.add(Input(shape=(lookback, X.shape[1])))
                 model.add(SimpleRNN(units, return_sequences=False))
@@ -488,9 +495,13 @@ class Models:
                 model.add(Dense(1))
                 model.compile(optimizer=Adam(learning_rate=learning_rate), loss="mse")
                 model.fit(
-                    X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False
+                    X_train,
+                    y_train,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    verbose=False,
                 )
-    
+
                 end_time = time.time()
                 end_memory = self.get_memory_usage()
                 time_usage = end_time - start_time
@@ -502,34 +513,35 @@ class Models:
                 log.info(f"Loaded RNN model from {pickle_file}.")
                 time_usage = 0
                 memory_usage = 0
-           
+
             y_pred = model.predict(X_test).flatten()
-    
+
             mse = mean_squared_error(y_test, y_pred)
             if verbose:
                 print(f"RNN MSE: {mse}")
             log.info(f"RNN MSE: {mse}")
-    
+
             # Generate trading signals
             signals = np.where(
                 y_pred > s,
                 f"Short {tickerX} / Long {tickerY}",
-                np.where(y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"),
+                np.where(
+                    y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"
+                ),
             )
-    
+
             df_test = df.iloc[-test_size:].copy()
             df_test["PredictedSpread"] = y_pred
             df_test["PredictedSignal"] = signals
             df_test["Pair"] = p
             df_test["Model"] = "RNN"
-    
+
             return model, mse, df_test, time_usage, memory_usage
         except Exception as e:
             print(f"Failed to run RNN model: {str(e)}")
             log.error(f"Failed to run RNN model: {str(e)}")
             return None, np.inf, pd.DataFrame(), 0, 0
-    
-    
+
     # @tf.function(reduce_retracing=True)
     def transformer_regression(
         self,
@@ -548,7 +560,7 @@ class Models:
     ):
         """
         Runs a Transformer model on the input data.
-    
+
         Parameters:
         ___________
         df (pd.DataFrame):
@@ -573,7 +585,7 @@ class Models:
             Batch size for training
         pickle_file (str, default=None):
             string with path to the pickle file if no need to train the model from scratch.
-    
+
         Returns:
         ________
         model (tf.keras.Model):
@@ -588,26 +600,26 @@ class Models:
             df = df.copy()
             X = df.drop(["NormalizedSpread"], axis=1).values
             y = df["NormalizedSpread"].values
-    
+
             tickerX, tickerY = p.split(" ")
-    
+
             # Convert data to sequences
             X_seq, y_seq = [], []
             for i in range(lookback, len(X)):
                 X_seq.append(X[i - lookback : i])
                 y_seq.append(y[i])
-    
+
             X_seq, y_seq = np.array(X_seq), np.array(y_seq)
-    
+
             # Train-Test split
             test_size = int(0.2 * len(X_seq))
             X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
             y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
-    
+
             if pickle_file is None or not os.path.exists(pickle_file):
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
-    
+
                 # Define the Transformer encoder block
                 def transformer_encoder(inputs, num_heads, ff_dim, dropout_rate):
                     attention = MultiHeadAttention(num_heads=num_heads, key_dim=ff_dim)(
@@ -619,7 +631,7 @@ class Models:
                     ff_output = Dense(inputs.shape[-1])(ff_output)
                     ff_output = Dropout(dropout_rate)(ff_output)
                     return LayerNormalization(epsilon=1e-6)(attention + ff_output)
-    
+
                 inputs = Input(shape=(lookback, X.shape[1]))
                 x = transformer_encoder(inputs, num_heads, ff_dim, dropout_rate)
                 x = Flatten()(x)
@@ -629,9 +641,13 @@ class Models:
                 model = Model(inputs, outputs)
                 model.compile(optimizer=Adam(learning_rate=learning_rate), loss="mse")
                 model.fit(
-                    X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=False
+                    X_train,
+                    y_train,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    verbose=False,
                 )
-    
+
                 end_time = time.time()
                 end_memory = self.get_memory_usage()
                 time_usage = end_time - start_time
@@ -642,34 +658,35 @@ class Models:
                 log.info(f"Loaded Transformer model from {pickle_file}")
                 time_usage = 0
                 memory_usage = 0
-    
+
             y_pred = model.predict(X_test).flatten()
-    
+
             mse = mean_squared_error(y_test, y_pred)
             if verbose:
                 print(f"Transformer MSE: {mse}")
             log.info(f"Transformer MSE: {mse}")
-    
+
             # Generate trading signals
             signals = np.where(
                 y_pred > s,
                 f"Short {tickerX} / Long {tickerY}",
-                np.where(y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"),
+                np.where(
+                    y_pred < -1 * s, f"Long {tickerX} / Short {tickerY}", "No action"
+                ),
             )
-    
+
             df_test = df.iloc[-test_size:].copy()
             df_test["PredictedSpread"] = y_pred
             df_test["PredictedSignal"] = signals
             df_test["Pair"] = p
             df_test["Model"] = "Transformer"
-    
+
             return model, mse, df_test, time_usage, memory_usage
         except Exception as e:
             print(f"Failed to run Transformer model: {str(e)}")
             log.error(f"Failed to run Transformer model: {str(e)}")
             return None, np.inf, pd.DataFrame(), 0, 0
-    
-    
+
     def plot_model_forecasts(
         self,
         ridge_test_df: pd.DataFrame = None,
@@ -684,7 +701,7 @@ class Models:
     ):
         """
         Plots actual vs predicted spread values for both Ridge and XGBoost models.
-    
+
         Parameters:
         ___________
         ridge_test_df, xgb_test_df, lstm_test_df, transformer_test_df (pd.DataFrame):
@@ -711,7 +728,7 @@ class Models:
                 color="black",
                 linewidth=0.75,
             )
-    
+
             # Plot Ridge predictions if available
             if ridge_test_df is not None and not ridge_test_df.empty:
                 ax.plot(
@@ -721,7 +738,7 @@ class Models:
                     linewidth=0.75,
                     linestyle="--",
                 )
-    
+
             # Plot XGBoost predictions if available
             if xgb_test_df is not None and not xgb_test_df.empty:
                 ax.plot(
@@ -731,7 +748,7 @@ class Models:
                     linewidth=0.75,
                     linestyle=":",
                 )
-    
+
             # Plot LSTM predictions if available
             if lstm_test_df is not None and not lstm_test_df.empty:
                 ax.plot(
@@ -741,7 +758,7 @@ class Models:
                     linewidth=0.75,
                     linestyle="-.",
                 )
-    
+
             # Plot Transformer predictions if available
             if transformer_test_df is not None and not transformer_test_df.empty:
                 ax.plot(
@@ -751,7 +768,7 @@ class Models:
                     linewidth=0.75,
                     linestyle="-",
                 )
-    
+
             # Plot RNN predictions if available
             if rnn_test_df is not None and not rnn_test_df.empty:
                 ax.plot(
@@ -761,14 +778,16 @@ class Models:
                     linewidth=0.75,
                     linestyle="-",
                 )
-    
+
             # Clearer timestamp displaying
             if (len(tickerX) > 6) & (len(tickerY) > 6):
                 ax.xaxis.set_major_locator(plt.IndexLocator(base=200, offset=0))
             else:
                 ax.xaxis.set_major_locator(plt.IndexLocator(base=40, offset=0))
-    
-            plt.title(f"Model Predictions for {tickerX}-{tickerY} Spread - Validation Set")
+
+            plt.title(
+                f"Model Predictions for {tickerX}-{tickerY} Spread - Validation Set"
+            )
             plt.xlabel("Time")
             plt.ylabel("Normalized Spread")
             plt.legend(fontsize=8, bbox_to_anchor=(1.35, 1), loc="upper right")
@@ -780,14 +799,20 @@ class Models:
             print(f"Failed to plot model forecasts: {str(e)}")
             log.error(f"Failed to plot model forecasts: {str(e)}")
             return None
-    
-    
+
     def lasso_cross_validation(
-        self, df, feature_cols, target_col, cv=5, random_seed=42, max_iter=1000, tol=1e-4
+        self,
+        df,
+        feature_cols,
+        target_col,
+        cv=5,
+        random_seed=42,
+        max_iter=1000,
+        tol=1e-4,
     ):
         """
         Performs LassoCV on a given dataset.
-    
+
         Parameters:
         ___________
         data (pd.DataFrame):
@@ -810,31 +835,32 @@ class Models:
             Maximum number of iterations for Lasso optimization.
         tol (float):
             Convergence tolerance.
-    
+
         Returns:
         ________
         model (LassoCV object):
             Trained LassoCV model
         """
-    
+
         # Split into features and target
         X = df[feature_cols].values
         y = df[target_col].values
-    
+
         # Initialize and fit LassoCV
         model = LassoCV(cv=cv, random_state=random_seed, max_iter=max_iter, tol=tol)
         model.fit(X, y)
-    
+
         print(f"Best Alpha: {model.alpha_}")
         print(f"Non-zero Coefficients: {np.sum(model.coef_ != 0)}")
-    
+
         return model
-    
-    
-    def hyperparameter_tuning(self, df, p, model_func, param_grid, verbose, use_gpu=False):
+
+    def hyperparameter_tuning(
+        self, df, p, model_func, param_grid, verbose, use_gpu=False
+    ):
         """
         Runs hyperparameter tuning for a given model function.
-    
+
         Parameters:
         ___________
         df (pd.DataFrame):
@@ -845,7 +871,7 @@ class Models:
             Model function to call (e.g., ridge_regression).
         param_grid (dict):
             Dictionary of hyperparameter values to test.
-    
+
         Returns:
         ________
         best_model (object):
@@ -859,33 +885,35 @@ class Models:
         verbose (bool):
             If verbose==True, print model statements.
         """
-    
+
         param_names = list(param_grid.keys())  # Extract param names
-        param_values = list(param_grid.values())  # Extract corresponding lists of values
-    
+        param_values = list(
+            param_grid.values()
+        )  # Extract corresponding lists of values
+
         best_mse = np.inf
         best_model = None
         best_params = None
         best_df_test = None
-    
+
         for param_combination in product(*param_values):
             params = dict(
                 zip(param_names, param_combination)
             )  # Convert tuple to dictionary
-    
+
             if verbose:
                 print(f"Testing params: {params}")  # Optional logging
-    
+
             model, mse, df_test, _, _ = model_func(
                 df, p, **params, verbose=verbose
             )  # Run model function
-    
+
             if mse < best_mse:
                 best_mse = mse
                 best_model = model
                 best_params = params
                 best_df_test = df_test
-    
+
         if verbose:
             print(f"Best parameters: {best_params}, Best MSE: {best_mse}")
         return best_model, best_params, best_mse, best_df_test

@@ -4,6 +4,7 @@ import talib
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from utils import log
 
+
 class FeaturesEngineering:
     def __init__(self, default_config=None):
         if default_config is None:
@@ -497,7 +498,7 @@ class FeaturesEngineering:
         try:
             if config is None:
                 config = self.default_config
-                
+
             price_pairs = [ticker_eqt, ticker_cpy]
             list_indicators = []
 
