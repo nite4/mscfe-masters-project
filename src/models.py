@@ -48,7 +48,8 @@ class Models:
         s: float = 2.0,
         solver: str = "auto",
         pickle_file: str = None,
-        verbose=True,
+        testing: bool = False,
+        verbose: bool = True,
     ):
         """
         Runs a Ridge Regression model on the input data.
@@ -90,18 +91,21 @@ class Models:
             y = df["NormalizedSpread"]
 
             tickerX, tickerY = p.split(" ")
-
-            # Train-Validation split 80:20
-            test_size = 0.2
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, shuffle=False
-            )
-            # Scale data
-            # scaler = StandardScaler()
-            # X_train_scaled = scaler.fit_transform(X_train)
-            # X_test_scaled = scaler.transform(X_test)
+            
+            if testing:
+                print("Testing Phase")
+                X_test = X
+                y_test = y
+            else:
+                print("Training/Validation Phase")
+                # Train-Validation split 80:20
+                test_size = 0.2
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=test_size, shuffle=False
+                )
 
             if pickle_file is None or not os.path.exists(pickle_file):
+                print('Create new model object')
                 # Measure time and memory usage during training
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
@@ -117,7 +121,7 @@ class Models:
             else:
                 # Load the model instance using pypickle
                 ridge = pypickle.load(pickle_file)
-                print(f"Loaded Ridge Regression model from {pickle_file}.")
+                # print(f"Loaded Ridge Regression model from {pickle_file}.")
                 log.info(f"Loaded Ridge Regression model from {pickle_file}.")
                 time_usage = 0
                 memory_usage = 0
@@ -162,6 +166,7 @@ class Models:
         max_depth: int = 3,
         s: float = 2.0,
         pickle_file: str = None,
+        testing: bool = False,
         verbose: bool = True,
     ):
         """
@@ -208,16 +213,18 @@ class Models:
 
             tickerX, tickerY = p.split(" ")
 
-            # Train-Validation split 80:20
-            test_size = 0.2
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, shuffle=False
-            )
-            # Scale data
-            # scaler = StandardScaler()
-            # X_train_scaled = scaler.fit_transform(X_train)
-            # X_test_scaled = scaler.transform(X_test)
-
+            if testing:
+                print("Testing Phase")
+                X_test = X
+                y_test = y
+            else:
+                print("Training/Validation Phase")
+                # Train-Validation split 80:20
+                test_size = 0.2
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=test_size, shuffle=False
+                )
+                
             if pickle_file is None or not os.path.exists(pickle_file):
                 start_time = time.time()
                 start_memory = self.get_memory_usage()
@@ -297,6 +304,7 @@ class Models:
         epochs: int = 50,
         batch_size: int = 32,
         pickle_file: str = None,
+        testing: bool = False,
         verbose: bool = True,
     ):
         """
@@ -350,10 +358,16 @@ class Models:
 
             X_seq, y_seq = np.array(X_seq), np.array(y_seq)
 
-            # Train-Test split
-            test_size = int(0.2 * len(X_seq))
-            X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
-            y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
+            if testing:
+                print("Testing Phase")
+                X_test = X_seq
+                y_test = y_seq
+            else:
+                print("Training/Validation Phase")
+                # Train-Test split
+                test_size = int(0.2 * len(X_seq))
+                X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
+                y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
 
             if pickle_file is None or not os.path.exists(pickle_file):
 
@@ -401,7 +415,10 @@ class Models:
                 ),
             )
 
-            df_test = df.iloc[-test_size:].copy()
+            if testing:
+                df_test = df.iloc[lookback:].copy()
+            else:
+                df_test = df.iloc[-test_size:].copy()
             df_test["PredictedSpread"] = y_pred
             df_test["PredictedSignal"] = signals
             df_test["Pair"] = p
@@ -426,7 +443,8 @@ class Models:
         epochs: int = 50,
         batch_size: int = 32,
         pickle_file: str = None,
-        verbose=True,
+        testing: bool = False,
+        verbose: bool = True,
     ):
         """
         Runs an RNN model on the input data.
@@ -479,10 +497,16 @@ class Models:
 
             X_seq, y_seq = np.array(X_seq), np.array(y_seq)
 
-            # Train-Test split
-            test_size = int(0.2 * len(X_seq))
-            X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
-            y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
+            if testing:
+                print("Testing Phase")
+                X_test = X_seq
+                y_test = y_seq
+            else:
+                print("Training/Validation Phase")
+                # Train-Test split
+                test_size = int(0.2 * len(X_seq))
+                X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
+                y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
 
             if pickle_file is None or not os.path.exists(pickle_file):
                 start_time = time.time()
@@ -530,7 +554,10 @@ class Models:
                 ),
             )
 
-            df_test = df.iloc[-test_size:].copy()
+            if testing:
+                df_test = df.iloc[lookback:].copy()
+            else:
+                df_test = df.iloc[-test_size:].copy()
             df_test["PredictedSpread"] = y_pred
             df_test["PredictedSignal"] = signals
             df_test["Pair"] = p
@@ -556,6 +583,7 @@ class Models:
         epochs: int = 50,
         batch_size: int = 32,
         pickle_file: str = None,
+        testing: bool = False,
         verbose: bool = True,
     ):
         """
@@ -611,10 +639,16 @@ class Models:
 
             X_seq, y_seq = np.array(X_seq), np.array(y_seq)
 
-            # Train-Test split
-            test_size = int(0.2 * len(X_seq))
-            X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
-            y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
+            if testing:
+                print("Testing Phase")
+                X_test = X_seq
+                y_test = y_seq
+            else:
+                print("Training/Validation Phase")
+                # Train-Test split
+                test_size = int(0.2 * len(X_seq))
+                X_train, X_test = X_seq[:-test_size], X_seq[-test_size:]
+                y_train, y_test = y_seq[:-test_size], y_seq[-test_size:]
 
             if pickle_file is None or not os.path.exists(pickle_file):
                 start_time = time.time()
@@ -675,7 +709,10 @@ class Models:
                 ),
             )
 
-            df_test = df.iloc[-test_size:].copy()
+            if testing:
+                df_test = df.iloc[lookback:].copy()
+            else:
+                df_test = df.iloc[-test_size:].copy()
             df_test["PredictedSpread"] = y_pred
             df_test["PredictedSignal"] = signals
             df_test["Pair"] = p
