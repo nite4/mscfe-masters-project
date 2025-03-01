@@ -342,8 +342,8 @@ def plot_spread(df, X, Y, s: float = 2.0, ax=None):
             fig, ax = plt.subplots(figsize=(8, 5))
         else:
             plt.sca(ax)
-        ax.axhline(2, color="orange", linestyle="--", linewidth=0.75)
-        ax.axhline(-2, color="orange", linestyle="--", linewidth=0.75)
+        ax.axhline(s, color="orange", linestyle="--", linewidth=0.75)
+        ax.axhline(-s, color="orange", linestyle="--", linewidth=0.75)
         ax.plot(
             df["NormalizedSpread"],
             label="Normalized Spread",
