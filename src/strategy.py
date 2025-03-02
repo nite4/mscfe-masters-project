@@ -363,13 +363,13 @@ class Strategy:
             }
         else:
             performance_metrics = {
-                "Total Return": "Not available",
-                "Annualized Return": "Not available",
-                "Sharpe Ratio": "Not available",
-                "Sortino Ratio": "Not available",
-                "Hit Ratio": "Not available",
-                "Max Drawdown": "Not available",
-                "Portfolio Volatility": "Not available",
+                "Total Return": np.nan,
+                "Annualized Return": np.nan,
+                "Sharpe Ratio": np.nan,
+                "Sortino Ratio": np.nan,
+                "Hit Ratio": np.nan,
+                "Max Drawdown": np.nan,
+                "Portfolio Volatility": np.nan,
             }
         self.performance_df = pd.DataFrame(
             list(performance_metrics.items()), columns=["Metric", "Value"]
