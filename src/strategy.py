@@ -1,6 +1,8 @@
 import portfolio_performance as pp
 from utils import log
 import pandas as pd
+import numpy as np
+
 
 class Strategy:
     """
@@ -26,8 +28,8 @@ class Strategy:
         max_trade_size=1000,
         close_threshold=144,
     ):
-        self.balance = initial_capital
-        self.asset_max_exposure = max_exposure * initial_capital
+        self.initial_capital = initial_capital
+        self.asset_max_exposure = max_exposure * self.initial_capital
         self.m_threshold = m_threshold
         self.max_trade_size = max_trade_size
         self.close_threshold = close_threshold
@@ -201,7 +203,7 @@ class Strategy:
             pnl_A = (pos["entry_price_A"] - price_A) * pos["quantity_A"]
             pnl_B = (price_B - pos["entry_price_B"]) * pos["quantity_B"]
         total_pnl = pnl_A + pnl_B
-        self.balance += total_pnl
+        self.initial_capital += total_pnl
 
         # Update trade history to mark trades as closed
         for trade in self.trade_history:
@@ -304,8 +306,76 @@ class Strategy:
                     self.close_trade(
                         pair, open_time, asset_A, asset_B, next_open_A, next_open_B
                     )
+        performance_metrics = {}
+        closed_trades = [
+            trade for trade in self.trade_history if trade.get("closed", False)
+        ]
+        if closed_trades:
+            # Sort closed trades by close_time
+            closed_trades = sorted(
+                closed_trades, key=lambda x: pd.to_datetime(x["close_time"])
+            )
+            # Use the open_time of the first trade and close_time of the last trade for total duration
+            start_time = pd.to_datetime(closed_trades[0]["open_time"])
+            end_time = pd.to_datetime(closed_trades[-1]["close_time"])
+            t_years = (end_time - start_time).days / 365.25
+            if t_years <= 0:
+                t_years = None
 
+            # Construct portfolio value series based on closed trades.
+            # Start with initial capital and add each trade's pnl cumulatively.
+            portfolio_values = [self.initial_capital]
+            for trade in closed_trades:
+                portfolio_values.append(portfolio_values[-1] + trade["pnl"])
+            # Calculate discrete returns from portfolio values
+            portfolio_values = np.array(portfolio_values)
+            returns = np.diff(portfolio_values) / portfolio_values[:-1]
+
+            # Total return over the period
+            total_return = portfolio_values[-1] / self.initial_capital - 1
+            # Annualized return (if t_years is available)
+            annual_ret = (
+                pp.annualized_return(
+                    self.initial_capital, portfolio_values[-1], t_years
+                )
+                if t_years
+                else None
+            )
+            # Sharpe Ratio (assuming a risk-free rate of 0)
+            sharpe = pp.sharpe_ratio(returns, 0)
+            # Sortino Ratio (risk-free rate 0)
+            sortino = pp.sortino_ratio(returns, 0)
+            # Hit Ratio: proportion of positive return periods
+            hit = pp.hit_ratio(returns)
+            # Maximum Drawdown based on the portfolio values time series
+            max_dd = pp.max_drawdown(portfolio_values)
+            # Portfolio volatility (standard deviation of returns)
+            vol = pp.portfolio_volatility(returns)
+
+            performance_metrics = {
+                "Total Return": total_return,
+                "Annualized Return": annual_ret,
+                "Sharpe Ratio": sharpe,
+                "Sortino Ratio": sortino,
+                "Hit Ratio": hit,
+                "Max Drawdown": max_dd,
+                "Portfolio Volatility": vol,
+            }
+        else:
+            performance_metrics = {
+                "Total Return": "Not available",
+                "Annualized Return": "Not available",
+                "Sharpe Ratio": "Not available",
+                "Sortino Ratio": "Not available",
+                "Hit Ratio": "Not available",
+                "Max Drawdown": "Not available",
+                "Portfolio Volatility": "Not available",
+            }
+        self.performance_df = pd.DataFrame(
+            list(performance_metrics.items()), columns=["Metric", "Value"]
+        )
         return {
-            "Final Portfolio Value": self.balance,
+            "Final Portfolio Value": self.initial_capital,
             "Trades Executed": self.trade_history,
+            "Performance Metrics": self.performance_df,
         }
