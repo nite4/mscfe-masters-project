@@ -1,7 +1,6 @@
 import portfolio_performance as pp
-
 from utils import log
-
+import pandas as pd
 
 class Strategy:
     """
@@ -34,6 +33,84 @@ class Strategy:
         self.close_threshold = close_threshold
         self.trade_history = []  # Record of all executed trades
         self.positions = {}  # Open positions, keyed by pair
+
+    @staticmethod
+    def prepare_strategy_data(df_prices, df_pred):
+        """
+        Prepares strategy data by merging predicted spread signals with historical price data.
+
+        This function processes prediction data (`df_pred`) containing spread signals for trading
+        asset pairs and merges it with price data (`df_prices`) to obtain closing prices and next
+        open prices for each asset in the pair.
+
+        Parameters:
+        -----------
+        df_prices : pd.DataFrame
+            A DataFrame containing historical price data with columns:
+            - 'OpenTime' (timestamp of the price record)
+            - 'Symbol' (asset symbol)
+            - 'Close' (closing price of the asset)
+            - 'NextOpen' (next period's open price of the asset)
+
+        df_pred : pd.DataFrame
+            A DataFrame containing predicted spread signals with columns:
+            - 'Pair' (string, asset pair separated by space, e.g., "BTC USD")
+            - 'NormalizedSpread' (normalized spread value)
+            - 'PredictedSpread' (model-predicted spread value)
+            - 'PredictedSignal' (trading signal based on predicted spread)
+            - 'OpenTime' (timestamp corresponding to the prediction)
+
+        Returns:
+        --------
+        pd.DataFrame
+            A DataFrame containing the merged strategy data with the following columns:
+            - 'OpenTime' (timestamp)
+            - 'Pair' (asset pair)
+            - 'NormalizedSpread' (normalized spread value)
+            - 'PredictedSpread' (predicted spread value)
+            - 'PredictedSignal' (trading signal)
+            - 'AssetA' (first asset in the pair)
+            - 'AssetB' (second asset in the pair)
+            - 'CloseA' (closing price of AssetA)
+            - 'NextOpenA' (next open price of AssetA)
+            - 'CloseB' (closing price of AssetB)
+            - 'NextOpenB' (next open price of AssetB)
+
+        Notes:
+        ------
+        - The function extracts `AssetA` and `AssetB` from the 'Pair' column.
+        - It performs two separate left merges with `df_prices` to obtain closing and next open
+          prices for both assets in the pair.
+        - The output is sorted by 'OpenTime' to ensure temporal consistency.
+
+        """
+
+        col = ["Pair", "NormalizedSpread", "PredictedSpread", "PredictedSignal"]
+
+        df_pred = df_pred[col].reset_index().sort_values("OpenTime")
+        df_pred["OpenTime"] = pd.to_datetime(df_pred["OpenTime"])
+        df_pred[["AssetA", "AssetB"]] = df_pred["Pair"].str.split(" ", n=1, expand=True)
+
+        df_strategy = (
+            df_pred.merge(
+                df_prices[["OpenTime", "Symbol", "Close", "NextOpen"]],
+                left_on=["OpenTime", "AssetA"],
+                right_on=["OpenTime", "Symbol"],
+                how="left",
+            )
+            .drop(["Symbol"], axis=1)
+            .rename(columns={"NextOpen": "NextOpenA", "Close": "CloseA"})
+            .merge(
+                df_prices[["OpenTime", "Symbol", "Close", "NextOpen"]],
+                left_on=["OpenTime", "AssetB"],
+                right_on=["OpenTime", "Symbol"],
+                how="left",
+            )
+            .drop(["Symbol"], axis=1)
+            .rename(columns={"NextOpen": "NextOpenB", "Close": "CloseB"})
+        )
+
+        return df_strategy
 
     def execute_trade(
         self, pair, signal, open_time, asset_A, asset_B, next_open_A, next_open_B
